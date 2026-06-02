@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tn-compression"
+version = "0.1.0"
+description = "Post-training tensor-decomposition compression for PyTorch models"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["pytorch", "compression", "tensor-decomposition", "cka", "interpretability"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch",
+  "numpy",
+  "scipy",
+  "PyYAML",
+  "tensorly",
+]
+
+[project.optional-dependencies]
+demo = [
+  "matplotlib",
+  "torchvision",
+]
+test = [
+  "pytest",
+]
+
+[tool.setuptools.packages.find]
+include = ["tn_compression*", "compression*"]

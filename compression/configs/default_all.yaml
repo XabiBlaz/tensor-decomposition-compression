@@ -1,0 +1,20 @@
+schema_version: 1
+artifact:
+  kind: live_module
+runtime:
+  device: auto
+compression:
+  mode: default_all
+  default_method:
+    type: tensor_train
+    structure: TTPWT
+    method: SVD
+    energy: 0.94
+    rank: null
+    rank_cap: null
+output:
+  dir: compression/outputs
+  plan_dir: compression/outputs
+  name: compressed_model
+  artifacts:
+    - kind: state_dict

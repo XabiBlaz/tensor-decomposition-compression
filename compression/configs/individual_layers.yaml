@@ -1,0 +1,28 @@
+schema_version: 1
+artifact:
+  kind: live_module
+runtime:
+  device: auto
+compression:
+  mode: individual
+  layers:
+    conv1:
+      type: tensor_train
+      structure: TTPWT
+      method: SVD
+      energy: 0.98
+      rank: null
+      rank_cap: null
+    layer1/0/conv1:
+      type: tensor_train
+      structure: TTPWT
+      rank: 4
+    fc:
+      type: cp2
+      rank: 8
+output:
+  dir: compression/outputs
+  plan_dir: compression/outputs
+  name: compressed_model
+  artifacts:
+    - kind: state_dict
