@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
     config = load_config(args.config)
+    code_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     manifest = {}
     if args.checkpoint:
         model, manifest = load_bundle(args.checkpoint, device=args.device)
@@ -43,7 +44,7 @@ def main():
                           checkpoint_weights_sha256=manifest.get("weights_sha256"),
                           environment={"python": platform.python_version(), "torch": str(torch.__version__),
                                        "device": args.device, "threads": torch.get_num_threads()},
-                          code_revision=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip())
+                          code_revision=code_revision)
             destination = args.output_dir / f"{method}-seed{seed}.json"
             destination.write_text(json.dumps(result, indent=2) + "\n")
             print(destination, flush=True)
