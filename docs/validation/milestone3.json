@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "task": "causal_lm",
+    "nll": 3.1943621407815845,
+    "perplexity": 24.394608402741824,
+    "tokens": 817,
+    "sequences": 8
+  },
+  "model_tensor_bytes": 1976131200,
+  "candidates": [
+    {
+      "path": "model.layers.0.mlp.up_proj",
+      "method": "unchanged",
+      "rank": null,
+      "bytes_saved": 0,
+      "model_tensor_bytes": 1976131200,
+      "delta_nll": 0.0,
+      "relative_squared_error": 0.0,
+      "nll": 3.1943621407815845
+    },
+    {
+      "path": "model.layers.0.mlp.up_proj",
+      "method": "svd",
+      "rank": 256,
+      "squared_error": 33300.19441705066,
+      "relative_squared_error": 0.5570953281383857,
+      "mean_squared_error": 0.05348638340526486,
+      "output_elements": 622592,
+      "bytes_saved": 11534336,
+      "model_tensor_bytes": 1964596864,
+      "delta_nll": 2.2305294676539074,
+      "task": "causal_lm",
+      "nll": 5.424891608435492,
+      "perplexity": 226.9867415337892,
+      "tokens": 817,
+      "sequences": 8,
+      "calibration_rows": 128,
+      "seconds": 11.57548495195806,
+      "backend": "pytorch",
+      "vllm": "unsupported_factorized_representation"
+    },
+    {
+      "path": "model.layers.0.mlp.up_proj",
+      "method": "svd",
+      "rank": 128,
+      "squared_error": 42969.62532200339,
+      "relative_squared_error": 0.7188599927959558,
+      "mean_squared_error": 0.06901731040874826,
+      "output_elements": 622592,
+      "bytes_saved": 14483456,
+      "model_tensor_bytes": 1961647744,
+      "delta_nll": 4.60343055304874,
+      "task": "causal_lm",
+      "nll": 7.797792693830324,
+      "perplexity": 2435.2207630005482,
+      "tokens": 817,
+      "sequences": 8,
+      "calibration_rows": 128,
+      "seconds": 10.967624053359032,
+      "backend": "pytorch",
+      "vllm": "unsupported_factorized_representation"
+    },
+    {
+      "path": "model.layers.0.mlp.up_proj",
+      "method": "svd",
+      "rank": 64,
+      "squared_error": 48871.887572365216,
+      "relative_squared_error": 0.817601840484404,
+      "mean_squared_error": 0.07849745511083538,
+      "output_elements": 622592,
+      "bytes_saved": 15958016,
+      "model_tensor_bytes": 1960173184,
+      "delta_nll": 6.033521467790172,
+      "task": "causal_lm",
+      "nll": 9.227883608571757,
+      "perplexity": 10176.980229973684,
+      "tokens": 817,
+      "sequences": 8,
+      "calibration_rows": 128,
+      "seconds": 11.349372006952763,
+      "backend": "pytorch",
+      "vllm": "unsupported_factorized_representation"
+    }
+  ],
+  "search_seconds": 56.08180119283497,
+  "scope": "isolated interventions; joint damage and inference speed are not inferred",
+  "workflow": {
+    "seed": 0,
+    "task": "causal_lm",
+    "model": {
+      "source": "transformers",
+      "name": "Qwen/Qwen2.5-0.5B",
+      "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+      "weights": "pretrained"
+    },
+    "data": {
+      "kind": "huggingface",
+      "name": "Salesforce/wikitext",
+      "revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+      "subset": "wikitext-2-raw-v1",
+      "splits": {
+        "calibration": "train",
+        "validation": "validation",
+        "test": "test"
+      },
+      "samples": 8,
+      "max_length": 128,
+      "batch_size": 1
+    },
+    "calibration": {
+      "layers": [
+        "model.layers.0.mlp.up_proj"
+      ],
+      "max_rows": 128
+    },
+    "candidates": {
+      "model.layers.0.mlp.up_proj": [
+        64,
+        128,
+        256
+      ]
+    },
+    "compression": {
+      "mode": "individual",
+      "layers": {
+        "model.layers.0.mlp.up_proj": {
+          "type": "svd",
+          "rank": 128
+        }
+      }
+    }
+  },
+  "example_ids": {
+    "calibration": [
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:34016",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:16235",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:33970",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:7990",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:17316",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:524",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:8390",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:14673"
+    ],
+    "validation": [
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1937",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:314",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:535",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1487",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1100",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1526",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2884",
+      "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:3010"
+    ]
+  }
+}

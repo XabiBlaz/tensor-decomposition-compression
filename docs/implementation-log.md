@@ -41,3 +41,15 @@ Bundles reconstruct shapes without repeating decomposition. Shared task function
 provide correct mask mapping, weighted metrics and frozen-normalization recovery.
 Remaining evidence for this milestone: public Pet/classification quality and a
 COCO subset AP comparison. The command paths and offline verification are usable.
+
+## Milestone 3 — causal language evaluation and candidate trials
+
+Implemented as separate commits for evaluation/data roles, bounded calibration,
+and CLI candidate trials. Python 3.11 / PyTorch 2.6 CPU suite: **66 passed** in
+35.07 seconds. Qwen's three rank candidates were measured against the same 817
+validation tokens; all substantially damaged quality for less than 1% whole-model
+tensor-byte savings. Exact IDs and raw measurements: `validation/milestone3.json`.
+See `language.md` for reproduction and limitations. The eight-example pilot is
+complete; downstream tasks, cross-domain evaluation and wider sampling remain
+research milestones. The Pet baseline has now finished 30 epochs; compressed
+public-data comparisons remain pending.
