@@ -101,10 +101,23 @@ def run(args):
             validation_batches, validation_ids = load_text_split(config, "validation")
             options = config.get("calibration", {})
             result = evaluate_candidates(model, calibration_batches, validation_batches, config["candidates"],
-                       device=device, max_rows=options.get("max_rows", 256), seed=config.get("seed", 0))
+                       device=device, max_rows=options.get("max_rows", 256), seed=config.get("seed", 0),
+                       method=config.get("candidate_method", "svd"))
             result.update(workflow=config, example_ids={"calibration": calibration_ids, "validation": validation_ids})
         elif args.command in {"inspect", "plan"}:
             result = generate_compression_plan(model, compression_config(config, output), device=device).plan
+        elif args.command == "compress" and config.get("pruning"):
+            from .language_experiments import prune_language
+            from .tasks.language import load_text_split
+            if config.get("task") != "causal_lm":
+                raise ValueError("Gated MLP pruning uses the causal-LM task contract.")
+            calibration_batches, calibration_ids = load_text_split(config, "calibration")
+            validation_batches, validation_ids = load_text_split(config, "validation")
+            result = prune_language(model, calibration_batches, validation_batches, device=device,
+                                    seed=config.get("seed", 0), **config["pruning"])
+            result["example_ids"] = {"calibration": calibration_ids, "validation": validation_ids}
+            if result["status"] == "accepted":
+                save_bundle(model, output / "bundle", metadata={"workflow": config, "pruning": result})
         elif args.command == "compress":
             result_object = compress_model(model, compression_config(config, output), inplace=True,
                                            device=device, return_model=True)

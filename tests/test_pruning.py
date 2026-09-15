@@ -60,3 +60,17 @@ def test_activation_score_matches_single_channel_removal():
               for index in range(8)]
     expected = torch.argsort(torch.stack(errors), descending=True)[:3].sort().values.tolist()
     assert select_channels(mlp, 3, method="activation", activations=activations) == expected
+
+
+def test_rejected_pruning_restores_original_architecture(monkeypatch):
+    import tn_compression.language_experiments as experiments
+    model = load_model({"source": "transformers", "config": {
+        "model_type": "qwen2", "hidden_size": 8, "intermediate_size": 16,
+        "num_hidden_layers": 1, "num_attention_heads": 2, "num_key_value_heads": 2, "vocab_size": 16}})
+    mlp = next(iter(gated_mlps(model).values()))
+    original = mlp.up_proj
+    measurements = iter([{"nll": 1.0}, {"nll": 2.0}])
+    monkeypatch.setattr(experiments, "evaluate_language", lambda *args, **kwargs: next(measurements))
+    result = experiments.prune_language(model, [], [], width=8, max_delta_nll=0.1)
+    assert result["status"] == "rejected"
+    assert mlp.up_proj is original and model.config.intermediate_size == 16

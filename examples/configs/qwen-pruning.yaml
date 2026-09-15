@@ -1,0 +1,20 @@
+seed: 0
+task: causal_lm
+model:
+  source: transformers
+  name: Qwen/Qwen2.5-0.5B
+  revision: 060db6499f32faf8b98477b0a26969ef7d8b9987
+  weights: pretrained
+data:
+  kind: huggingface
+  name: Salesforce/wikitext
+  revision: b08601e04326c79dfdd32d625aee71d232d685c3
+  subset: wikitext-2-raw-v1
+  splits: {calibration: train, validation: validation, test: test}
+  samples: 8
+  max_length: 128
+  batch_size: 1
+pruning:
+  width: 4096
+  method: weight
+  max_delta_nll: 0.5
