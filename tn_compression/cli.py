@@ -177,6 +177,7 @@ def run(args):
             result = export_onnx(model, inputs.to(device), output / "model.onnx")
         else:
             raise ValueError(f"Unknown command: {args.command}")
+    result.setdefault("workflow", config)
     (output / f"{args.command}.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
 
