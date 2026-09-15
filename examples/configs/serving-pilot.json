@@ -1,0 +1,23 @@
+{
+  "endpoint": "http://127.0.0.1:8000",
+  "model": "qwen-pilot",
+  "concurrency": 1,
+  "warmup": 1,
+  "max_tokens": 32,
+  "timeout_seconds": 30,
+  "prompts": [
+    "Explain why the sky appears blue.",
+    "Describe how a compiler translates source code."
+  ],
+  "engine": {
+    "vllm": "0.8.5",
+    "dtype": "float16",
+    "max_model_len": 512,
+    "gpu_memory_utilization": 0.8,
+    "prefix_caching": false,
+    "kv_cache_dtype": "auto",
+    "tensor_parallel_size": 1,
+    "enforce_eager": true,
+    "hardware": "must be recorded on the execution host"
+  }
+}
