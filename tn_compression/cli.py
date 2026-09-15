@@ -106,6 +106,18 @@ def run(args):
             result.update(workflow=config, example_ids={"calibration": calibration_ids, "validation": validation_ids})
         elif args.command in {"inspect", "plan"}:
             result = generate_compression_plan(model, compression_config(config, output), device=device).plan
+        elif args.command == "compress" and config.get("allocation"):
+            from .allocation import allocate_ranks
+            from .tasks.language import load_text_split
+            if config.get("task") != "causal_lm":
+                raise ValueError("Rank allocation currently uses the causal-LM task contract.")
+            calibration_batches, calibration_ids = load_text_split(config, "calibration")
+            validation_batches, validation_ids = load_text_split(config, "validation")
+            result = allocate_ranks(model, calibration_batches, validation_batches, config["candidates"],
+                       device=device, seed=config.get("seed", 0), **config["allocation"])
+            result["example_ids"] = {"calibration": calibration_ids, "validation": validation_ids}
+            if result["model_tensor_bytes"] < result["original_tensor_bytes"]:
+                save_bundle(model, output / "bundle", metadata={"workflow": config, "allocation": result})
         elif args.command == "compress" and config.get("pruning"):
             from .language_experiments import prune_language
             from .tasks.language import load_text_split
