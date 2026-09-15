@@ -1,0 +1,9 @@
+# Separate environment; do not merge this with requirements/core.txt.
+llmcompressor==0.5.1
+transformers==4.51.3
+datasets==2.18.0
+numpy==1.26.4
+pyarrow==14.0.2
+PyYAML==6.0.2
+tensorly==0.8.1
+scipy==1.15.2
