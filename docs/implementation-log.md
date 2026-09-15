@@ -23,3 +23,21 @@ serving-runtime compatibility requires separate verification; CPU results do not
 establish GPU or serving performance.
 
 No pushes have been made. Later milestones and research results remain pending.
+
+## Milestone 2 — lifecycle and vision adapters
+
+Python 3.11 CPU suite: **56 passed** in 31.21 seconds. Full synthetic SMP and
+ResNet18 workflows completed training, compression, recovery, reload, evaluation,
+ONNX parity and subprocess benchmarks. Compact raw validation results are in
+`validation/milestone2.json`; they are explicitly synthetic, not public-data
+accuracy evidence. A Faster R-CNN/ResNet50-FPN fixture passed variable-image-size,
+compression and exact checkpoint round-trip tests with detection output contracts.
+
+A separate existing Python 3.10/PyTorch 1.13 CUDA environment successfully executed
+SMP on GPU 1, selected by UUID. A public Pet baseline is being attempted there;
+its training and any later public-data results are not claimed complete here.
+
+Bundles reconstruct shapes without repeating decomposition. Shared task functions
+provide correct mask mapping, weighted metrics and frozen-normalization recovery.
+Remaining evidence for this milestone: public Pet/classification quality and a
+COCO subset AP comparison. The command paths and offline verification are usable.

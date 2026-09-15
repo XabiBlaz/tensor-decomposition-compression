@@ -1,0 +1,7 @@
+-r core.txt
+segmentation-models-pytorch==0.5.0
+timm==1.0.20
+onnx==1.17.0
+onnxruntime==1.21.1
+psutil==6.1.1
+pycocotools==2.0.8

@@ -1,0 +1,32 @@
+seed: 0
+task: segmentation
+num_classes: 3
+model:
+  source: smp
+  name: Unet
+  weights: imagenet
+  kwargs:
+    encoder_name: resnet34
+    classes: 3
+data:
+  kind: oxford_pet
+  root: data/pets
+  size: 256
+  batch_size: 8
+  seed: 42
+  download: true
+training:
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+compression:
+  mode: default_all
+  skip: [encoder.conv1, segmentation_head.0]
+  default_method:
+    type: partial_tucker
+    method: SVD
+    energy: 0.85
+benchmark:
+  input_shape: [1, 3, 256, 256]
+  warmup: 20
+  iterations: 100

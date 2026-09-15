@@ -1,0 +1,165 @@
+{
+  "scope": "offline synthetic integration, not a public-data quality benchmark",
+  "tasks": {
+    "segmentation": {
+      "evaluate": {
+        "task": "segmentation",
+        "examples": 8,
+        "loss": 1.119239330291748,
+        "mean_iou": 0.14724694226593105,
+        "mean_dice": 0.23878696133801092,
+        "per_class_iou": [
+          0.024678484532499132,
+          0.3067451087700096,
+          0.11031723349528437
+        ],
+        "per_class_dice": [
+          0.04816824966078698,
+          0.4694796356402471,
+          0.19871299871299872
+        ],
+        "confusion": [
+          [
+            71,
+            2318,
+            356
+          ],
+          [
+            62,
+            2242,
+            367
+          ],
+          [
+            70,
+            2320,
+            386
+          ]
+        ]
+      },
+      "export": {
+        "status": "verified",
+        "runtime": "onnxruntime_cpu",
+        "shape": [
+          2,
+          3,
+          32,
+          32
+        ],
+        "rtol": 0.0001,
+        "atol": 1e-05,
+        "max_absolute_error": 1.5795230865478516e-06,
+        "artifact_bytes": 2931298
+      },
+      "benchmark": {
+        "status": "ok",
+        "runtime": "pytorch",
+        "input_shape": [
+          1,
+          3,
+          32,
+          32
+        ],
+        "device": "cpu",
+        "task": "segmentation",
+        "warmup": 2,
+        "iterations": 10,
+        "threads": 1,
+        "seed": 0,
+        "torch_version": "2.6.0+cpu",
+        "python_version": "3.11.16",
+        "platform": "Linux-5.4.0-150-generic-x86_64-with-glibc2.27",
+        "cpu": "x86_64",
+        "load_seconds": 1.8459247946739197,
+        "rss_before_load_bytes": 245805056,
+        "rss_after_load_bytes": 415100928,
+        "rss_load_peak_bytes": 455036928,
+        "rss_inference_peak_bytes": 424108032,
+        "rss_sampling_interval_seconds": 0.005,
+        "latency_mean_ms": 4.962860234081745,
+        "latency_p50_ms": 4.996085539460182,
+        "latency_p95_ms": 5.173174664378166,
+        "latencies_ms": [
+          5.03728911280632,
+          4.737855866551399,
+          5.022399127483368,
+          4.692826420068741,
+          4.682330414652824,
+          4.9404725432395935,
+          5.052847787737846,
+          4.9697719514369965,
+          5.319634452462196,
+          5.173174664378166
+        ],
+        "parameters": 11224059,
+        "precision": "torch.float32",
+        "timing_scope": "complete_model_forward"
+      }
+    },
+    "classification": {
+      "evaluate": {
+        "task": "classification",
+        "examples": 8,
+        "loss": 1.1277911961078644,
+        "top1": 0.375
+      },
+      "export": {
+        "status": "verified",
+        "runtime": "onnxruntime_cpu",
+        "shape": [
+          2,
+          3,
+          32,
+          32
+        ],
+        "rtol": 0.0001,
+        "atol": 1e-05,
+        "max_absolute_error": 3.427267074584961e-07,
+        "artifact_bytes": 44562261
+      },
+      "benchmark": {
+        "status": "ok",
+        "runtime": "pytorch",
+        "input_shape": [
+          1,
+          3,
+          32,
+          32
+        ],
+        "device": "cpu",
+        "task": "classification",
+        "warmup": 2,
+        "iterations": 10,
+        "threads": 1,
+        "seed": 0,
+        "torch_version": "2.6.0+cpu",
+        "python_version": "3.11.16",
+        "platform": "Linux-5.4.0-150-generic-x86_64-with-glibc2.27",
+        "cpu": "x86_64",
+        "load_seconds": 1.282132862135768,
+        "rss_before_load_bytes": 244219904,
+        "rss_after_load_bytes": 379785216,
+        "rss_load_peak_bytes": 419508224,
+        "rss_inference_peak_bytes": 387108864,
+        "rss_sampling_interval_seconds": 0.005,
+        "latency_mean_ms": 9.839370287954807,
+        "latency_p50_ms": 9.743670001626015,
+        "latency_p95_ms": 10.009357705712318,
+        "latencies_ms": [
+          9.639427065849304,
+          9.63079184293747,
+          10.758373886346817,
+          10.009357705712318,
+          9.90968756377697,
+          9.80866327881813,
+          9.507594630122185,
+          9.577382355928421,
+          9.678676724433899,
+          9.873747825622559
+        ],
+        "parameters": 11142787,
+        "precision": "torch.float32",
+        "timing_scope": "complete_model_forward"
+      }
+    }
+  }
+}

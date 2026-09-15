@@ -434,6 +434,7 @@ def apply_plan(model: torch.nn.Module, plan: Mapping[str, Any]) -> tuple[int, in
             skipped_layers += 1
             warnings.append(f"Skipped {layer_name}: non-finite decomposition factors")
             continue
+        new_layer._tn_replacement = True
         set_submodule_by_path(model, layer_name, new_layer)
         compressed_layers += 1
     return compressed_layers, skipped_layers, warnings
@@ -574,9 +575,8 @@ def generate_compression_plan(
     device=None,
 ) -> CompressionPlanResult:
     cfg = normalize_config(config)
-    loaded = load_artifact(model_or_artifact, inplace=inplace)
+    loaded = load_artifact(model_or_artifact, inplace=True)
     device_obj = resolve_device(device, cfg)
-    loaded.model.to(device_obj)
     plan_result = build_plan(loaded.model, cfg)
     manifest_path = write_manifest(
         cfg,

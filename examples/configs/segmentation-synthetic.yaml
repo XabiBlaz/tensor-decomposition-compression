@@ -1,0 +1,31 @@
+seed: 0
+task: segmentation
+num_classes: 3
+model:
+  source: smp
+  name: Unet
+  weights: null
+  kwargs:
+    encoder_name: resnet18
+    encoder_depth: 3
+    decoder_channels: [32, 16, 8]
+    classes: 3
+data:
+  kind: synthetic
+  count: 8
+  size: 32
+  batch_size: 2
+training:
+  epochs: 1
+  learning_rate: 0.001
+compression:
+  mode: individual
+  layers:
+    encoder.layer1.0.conv1:
+      type: partial_tucker
+      rank: 8
+benchmark:
+  input_shape: [1, 3, 32, 32]
+  warmup: 2
+  iterations: 10
+  threads: 1
