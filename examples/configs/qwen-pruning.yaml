@@ -15,6 +15,6 @@ data:
   max_length: 128
   batch_size: 1
 pruning:
-  width: 4096
+  width: 4800
   method: weight
   max_delta_nll: 0.5
