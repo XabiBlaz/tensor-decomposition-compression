@@ -1,0 +1,7 @@
+-r core.txt
+transformers==4.51.3
+datasets==2.18.0
+pyarrow==14.0.2
+pandas==2.2.3
+sentencepiece==0.2.0
+safetensors==0.5.3
