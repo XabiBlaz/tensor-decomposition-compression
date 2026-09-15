@@ -139,7 +139,16 @@ def run(args):
             save_bundle(result_object.model, output / "bundle", metadata={"workflow": config, "compression": result["summary"]})
         elif args.command in {"train", "finetune"}:
             if config.get("task") == "causal_lm":
-                raise ValueError("Language recovery needs an explicit token budget and training policy; it is not yet supported.")
+                if not args.checkpoint:
+                    raise ValueError("Language recovery requires an explicit --checkpoint, including for the dense control.")
+                from .tasks.language import load_text_split
+                from .tasks.recovery import recover_language
+                training_batches, training_ids = load_text_split(config, "train")
+                result = recover_language(model, training_batches, device=device, **config["recovery"])
+                result["example_ids"] = training_ids
+                save_bundle(model, output / "bundle", metadata={"workflow": config, "recovery": result})
+                (output / f"{args.command}.json").write_text(json.dumps(result, indent=2) + "\n")
+                return result
             if args.command == "finetune" and not args.checkpoint:
                 raise ValueError("finetune requires an explicit compressed --checkpoint.")
             from .tasks.vision import train_vision
@@ -151,7 +160,17 @@ def run(args):
         elif args.command == "evaluate":
             result = evaluate(model, config, args.role, device)
         elif args.command == "export":
-            if config.get("task") in {"causal_lm", "detection"}:
+            if config.get("task") == "causal_lm":
+                from transformers import AutoTokenizer
+                from .tasks.language import load_text_split
+                from .language_export import export_language
+                batches, _ = load_text_split(config, args.role)
+                spec = config.get("tokenizer", config["model"])
+                tokenizer = AutoTokenizer.from_pretrained(spec["name"], revision=spec.get("revision"), trust_remote_code=False)
+                result = export_language(model, output / "huggingface", batches[0], tokenizer=tokenizer, device=device)
+                (output / "export.json").write_text(json.dumps(result, indent=2) + "\n")
+                return result
+            if config.get("task") == "detection":
                 raise ValueError("ONNX export currently supports classification and segmentation.")
             from .export import export_onnx
             inputs, _ = next(iter(vision_batches(config, args.role)))
