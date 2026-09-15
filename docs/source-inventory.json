@@ -1,0 +1,89 @@
+{
+  "recorded_date": "2026-09-15",
+  "sources": [
+    {
+      "repository": "tn_compression_module",
+      "head": "3c81e8aa2bd82d2faf9410ee3231be3a01350cb4",
+      "working_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "inspected_files": [
+        {
+          "path": "tn_compression/config.py",
+          "sha256": "13ac97529f69cf8371c88a0a0a04ee222b9251a80a518b2d984a9ef98a0ddcaa"
+        },
+        {
+          "path": "tn_compression/api.py",
+          "sha256": "8209739b6a7b257b9e2f7e043641a26ae417ed77a10cd4542f872b89652bfd96"
+        },
+        {
+          "path": "tests/test_dlf_api.py",
+          "sha256": "564f1e150967fc9e8adec2606c732af277343251d36a51901f31c4fea9b33df7"
+        },
+        {
+          "path": "tests/test_public_surface.py",
+          "sha256": "c2fa9fa4b4d3d27518c8c79301791afe85d145a8bd50d3b2706fe96a06c13e6e"
+        }
+      ]
+    },
+    {
+      "repository": "925013_qiavs",
+      "head": "b445c25a43566a037e5cb899112d7c1d207069b9",
+      "working_diff_sha256": "6557006b5bd422afb03737b0c65cb728b31acdf235e7c8854fbfa38366edc54f",
+      "inspected_files": [
+        {
+          "path": "compression/decompositions/tucker.py",
+          "sha256": "74be42e963cc7a51fb0fb82ea099868e45db0c0215be076d2dd6fdb393d77e70"
+        },
+        {
+          "path": "compression/decompositions/cp.py",
+          "sha256": "ebda2e63db21164f57ce7ba198dee974ed412aab3664c6e3444008698ca26f3d"
+        },
+        {
+          "path": "compression/smpl/models.py",
+          "sha256": "9d0fa914d531b88f53c17c8108cd1c9164350f5eb2da68ec3c0107ba184a5cc3"
+        },
+        {
+          "path": "compression/smpl/datasets.py",
+          "sha256": "3d1a67581732c2c2d39acfbda6e5b8c98092e361ae848742200186a5efa0df0e"
+        },
+        {
+          "path": "compression/finetune_compression.py",
+          "sha256": "9c20b46b05839291931a448e6530f94b52e2cc43d0adc8fa18c2f30dacf8924b"
+        }
+      ]
+    },
+    {
+      "repository": "segmentation_models_pytorch_Lortek",
+      "head": "1dc5bbf0600c1fa748428c83aed9aec27c3c5017",
+      "working_diff_sha256": "f2618308fe1d2edcd2756ea75152f182873228ac3acc11d623f06e3b85057337",
+      "inspected_files": [
+        {
+          "path": "smpl/models.py",
+          "sha256": "39e192e1b308681876d3cfae0a4ac70128793d610710d5209cf50765ce7dfb2d"
+        },
+        {
+          "path": "smpl/datasets.py",
+          "sha256": "39468329f01cbba87003f743c7ee83d31a0407cb56da882bb89aa6a9e5562b79"
+        }
+      ]
+    },
+    {
+      "repository": "arodrigo-RAM_Usage",
+      "head": "f63de97f32701a13fa09f8103e86b1635e39d5b8",
+      "working_diff_sha256": "17db212346180de3e9f1b8bad07c7485d64613b925ef35053f83cfa4511f5a04",
+      "inspected_files": [
+        {
+          "path": "benchmark_memory.py",
+          "sha256": "3d58d3f8a741ece6f65df326ccc96ccdb3b776871f75b913a5d9db54b3c866ee"
+        },
+        {
+          "path": "run_onnx.py",
+          "sha256": "187ecdcef5a778e8b1125bfb43b7b35a23f0678a97443c17015fc93505d5cc0a"
+        },
+        {
+          "path": "export_onnx.py",
+          "sha256": "bbe8f8b3b0eb68e2b456a6d48901672da19e6c1b2ea5e0877cd97cbb2d6a1fce"
+        }
+      ]
+    }
+  ]
+}

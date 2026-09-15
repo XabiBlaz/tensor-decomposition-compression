@@ -12,3 +12,7 @@ compression/outputs/*
 *.pt
 *.pth
 *.ckpt
+.venv/
+data/
+runs/
+*.onnx

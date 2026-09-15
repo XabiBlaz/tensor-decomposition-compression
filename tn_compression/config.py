@@ -66,6 +66,7 @@ def normalize_config(config: ConfigInput) -> Dict[str, Any]:
         raise ValueError(f"Config error: unsupported schema_version={raw.get('schema_version')!r}.")
 
     normalized = copy.deepcopy(raw)
+    normalized.pop("_config_hash", None)
     _validate_schema_v1(normalized)
     normalized["_config_hash"] = config_hash(normalized)
     return normalized
@@ -79,8 +80,8 @@ def build_compression_config(
 ) -> Dict[str, Any]:
     """Build a schema-v1 config from a compact compression mapping."""
     compression = (
-        compression_config.get("compression", {})
-        if isinstance(compression_config.get("compression", {}), Mapping)
+        compression_config["compression"]
+        if "compression" in compression_config and isinstance(compression_config["compression"], Mapping)
         else compression_config
     )
     method = copy.deepcopy(dict(compression.get("method", {}) or {}))
@@ -127,8 +128,8 @@ def _validate_schema_v1(config: Mapping[str, Any]) -> None:
     if not isinstance(compression, Mapping):
         raise ValueError("Config error: compression must be a mapping.")
     mode = compression.get("mode", "default_all")
-    if mode not in {"default_all", "individual", "cka_groups"}:
-        raise ValueError("Config error: compression.mode must be default_all, individual, or cka_groups.")
+    if mode not in {"default_all", "individual", "cka_groups", "fisher_groups", "fisher_segments"}:
+        raise ValueError(f"Config error: unsupported compression mode {mode!r}.")
 
     output = config.get("output", {})
     if not isinstance(output, Mapping):
@@ -140,3 +141,18 @@ def _validate_schema_v1(config: Mapping[str, Any]) -> None:
     for item in artifacts:
         if not isinstance(item, Mapping) or item.get("kind") not in allowed_outputs:
             raise ValueError("Config error: each output artifact must have kind full_module or state_dict.")
+
+
+def build_dlf_compression_config(dlf_config, *, output_dir, output_name="model_compressed"):
+    """Preserve the DLF output layout and compact configuration contract."""
+    source = copy.deepcopy(dict(dlf_config))
+    compression = source.setdefault("compression", {})
+    compression.setdefault("rank", 8)
+    config = build_compression_config(source, output_dir=Path(output_dir) / "tn_compression",
+                                      output_name=output_name)
+    if "rank_cap" not in compression and "rank_cap" not in compression.get("method", {}):
+        config["compression"]["default_method"].pop("rank_cap", None)
+    for key in ("layers", "groups", "segments", "skip", "analysis_dir"):
+        if key in compression:
+            config["compression"][key] = copy.deepcopy(compression[key])
+    return config

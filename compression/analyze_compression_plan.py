@@ -159,7 +159,7 @@ def compatible_methods(module: nn.Module) -> List[str]:
             return []
         return ["tensor_train", "partial_tucker", "cp3", "cp4"]
     if isinstance(module, nn.Linear):
-        return ["tensor_train", "cp2"]
+        return ["tensor_train", "svd", "cp2"]
     return []
 
 

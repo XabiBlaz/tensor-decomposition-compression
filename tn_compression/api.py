@@ -1,7 +1,9 @@
 from __future__ import annotations
 import copy
+import inspect
 import json
 import os
+import re
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version
@@ -114,9 +116,13 @@ def set_submodule_by_path(model: torch.nn.Module, layer_name: str, new_layer: to
 
 
 def is_eligible_layer(module: torch.nn.Module) -> tuple[bool, str]:
+    if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)) and type(module) not in {torch.nn.Conv2d, torch.nn.Linear}:
+        return False, "custom_forward_requires_adapter"
     if isinstance(module, torch.nn.Conv2d):
         if module.groups != 1:
             return False, "grouped_conv_not_supported"
+        if isinstance(module.padding, str):
+            return False, "string_padding_requires_adapter"
         return True, "eligible"
     if isinstance(module, torch.nn.Linear):
         return True, "eligible"
@@ -131,11 +137,35 @@ def is_method_compatible(module: torch.nn.Module, policy: Optional[Mapping[str, 
         return False, "unsupported_method_use_partial_tucker"
     if method_type in {"tensor_train", "tt"}:
         return isinstance(module, (torch.nn.Conv2d, torch.nn.Linear)), "eligible"
-    if method_type == "cp2":
+    if method_type in {"cp2", "svd"}:
         return isinstance(module, torch.nn.Linear), "cp2_only_supports_linear"
     if method_type in {"partial_tucker", "cp3", "cp4"}:
         return isinstance(module, torch.nn.Conv2d), f"{method_type}_only_supports_conv2d"
     return False, f"unsupported_compression_method_{method_type or 'missing'}"
+
+
+def protected_module_reasons(model):
+    """Conservatively protect aliases and parents that use child weights directly."""
+    owners = {}
+    reasons = {}
+    for name, module in model.named_modules(remove_duplicate=False):
+        for parameter in module.parameters(recurse=False):
+            owners.setdefault(id(parameter), []).append(name)
+        if not name:
+            continue
+        parent_name, _, child_name = name.rpartition(".")
+        parent = model.get_submodule(parent_name) if parent_name else model
+        try:
+            source = inspect.getsource(type(parent).forward)
+        except (OSError, TypeError):
+            source = ""
+        pattern = rf"\bself\s*\.\s*{re.escape(child_name)}\s*\.\s*(weight|bias)\b"
+        if isinstance(parent, torch.nn.MultiheadAttention) or re.search(pattern, source):
+            reasons[normalize_layer_name(name)] = "parent_accesses_weight_requires_adapter"
+    for names in owners.values():
+        if len(names) > 1:
+            reasons.update({normalize_layer_name(name): "shared_parameter_requires_adapter" for name in names})
+    return reasons
 
 
 def default_method(config: Mapping[str, Any]) -> Dict[str, Any]:
@@ -195,7 +225,7 @@ def _policy_for_layer(
         return None if _is_skip_policy(direct_policy) else copy.deepcopy(dict(direct_policy))
 
     mode = compression.get("mode", "default_all")
-    if mode == "cka_groups":
+    if mode in {"cka_groups", "fisher_groups", "fisher_segments"}:
         if group_policy_by_layer is None:
             return None
         for variant in layer_name_variants(layer_name):
@@ -221,7 +251,7 @@ def _estimate_tensor_train_params(module: torch.nn.Module, policy: Mapping[str, 
     rank = policy.get("rank")
     if rank is None and policy.get("rank_cap") is not None:
         rank = policy.get("rank_cap")
-    if rank is None or not isinstance(module, torch.nn.Conv2d):
+    if rank is None or not isinstance(module, torch.nn.Conv2d) or policy.get("type") not in {"tt", "tensor_train"} or policy.get("structure", "TTPWT") != "TTPWT":
         return result
     if isinstance(rank, int):
         ranks = [max(1, int(rank))] * 3
@@ -285,12 +315,12 @@ def build_plan(
 ) -> CompressionPlanResult:
     compression = config.get("compression", {}) if isinstance(config.get("compression", {}), Mapping) else {}
     mode = compression.get("mode", "default_all")
-    if mode not in {"default_all", "individual", "cka_groups"}:
-        raise ValueError("Config error: compression.mode must be default_all, individual, or cka_groups.")
+    if mode not in {"default_all", "individual", "cka_groups", "fisher_groups", "fisher_segments"}:
+        raise ValueError(f"Unsupported compression mode: {mode}")
 
     segments: List[Dict[str, Any]] = []
     group_policy_by_layer: Dict[str, Optional[Dict[str, Any]]] = {}
-    if mode == "cka_groups":
+    if mode in {"cka_groups", "fisher_groups", "fisher_segments"}:
         resolved_analysis_dir = analysis_dir or compression.get("analysis_dir") or config.get("analysis", {}).get("output_dir")
         if not resolved_analysis_dir:
             raise ValueError("Config error: cka_groups planning requires analysis_dir or compression.analysis_dir.")
@@ -302,9 +332,12 @@ def build_plan(
                     group_policy_by_layer[normalize_layer_name(variant)] = policy
 
     layer_entries = []
+    protected = protected_module_reasons(model)
     for layer_name, module in iter_named_leaf_modules(model):
         eligible, reason = is_eligible_layer(module)
-        policy = _policy_for_layer(config, layer_name, group_policy_by_layer if mode == "cka_groups" else None)
+        if layer_name in protected:
+            eligible, reason = False, protected[layer_name]
+        policy = _policy_for_layer(config, layer_name, group_policy_by_layer)
         forced = bool(isinstance(policy, Mapping) and policy.get("force", False))
         entry = {
             "name": layer_name,
@@ -333,7 +366,12 @@ def build_plan(
                 entry["skip_reason"] = "non_beneficial_compression"
         layer_entries.append(entry)
 
-    plan = {"mode": mode, "layers": layer_entries, "segments": segments}
+    total_params = sum(parameter.numel() for parameter in model.parameters())
+    covered_params = sum(entry["original_params"] for entry in layer_entries if entry["eligible"])
+    plan = {"mode": mode, "layers": layer_entries, "segments": segments,
+            "total_parameters": total_params, "eligible_parameters": covered_params,
+            "eligible_fraction": covered_params / total_params if total_params else 0.0,
+            "validation": "module_contract_only"}
     out_dir = plan_dir(config)
     plan_path = out_dir / "compression_plan.json"
     metadata_path = out_dir / "compression_metadata.json"
@@ -357,12 +395,17 @@ def apply_plan(model: torch.nn.Module, plan: Mapping[str, Any]) -> tuple[int, in
     compressed_layers = 0
     skipped_layers = 0
     warnings: List[str] = []
+    protected = protected_module_reasons(model)
     for entry in plan.get("layers", []):
         policy = entry.get("policy")
         if not entry.get("eligible", False) or not isinstance(policy, Mapping):
             skipped_layers += 1
             continue
         layer_name = entry["name"]
+        if normalize_layer_name(layer_name) in protected:
+            skipped_layers += 1
+            warnings.append(f"Skipped {layer_name}: {protected[normalize_layer_name(layer_name)]}")
+            continue
         try:
             layer = get_submodule_by_path(model, layer_name)
         except Exception as exc:
@@ -382,6 +425,14 @@ def apply_plan(model: torch.nn.Module, plan: Mapping[str, Any]) -> tuple[int, in
         if new_layer is None or new_layer is layer:
             skipped_layers += 1
             warnings.append(f"Skipped {layer_name}: compression returned no replacement")
+            continue
+        if not policy.get("force", False) and sum(p.numel() for p in new_layer.parameters()) >= sum(p.numel() for p in layer.parameters()):
+            skipped_layers += 1
+            warnings.append(f"Skipped {layer_name}: replacement does not reduce parameter count")
+            continue
+        if not all(torch.isfinite(parameter).all() for parameter in new_layer.parameters()):
+            skipped_layers += 1
+            warnings.append(f"Skipped {layer_name}: non-finite decomposition factors")
             continue
         set_submodule_by_path(model, layer_name, new_layer)
         compressed_layers += 1
@@ -482,6 +533,7 @@ def _compress_loaded_artifact(
     )
     compressed_model_path, compressed_model_kind = _compressed_artifact(artifacts)
     summary = {
+        "status": "compressed" if compressed_layers else "no_op",
         "compressed_layers": compressed_layers,
         "skipped_layers": skipped_layers,
         "warnings": warnings,

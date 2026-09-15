@@ -1,0 +1,9 @@
+# Python 3.11 reference; install matching CPU/CUDA torch wheels separately.
+torch==2.6.0
+torchvision==0.21.0
+numpy==1.26.4
+scipy==1.13.1
+tensorly==0.9.0
+PyYAML==6.0.2
+matplotlib==3.9.4
+pytest==8.3.5

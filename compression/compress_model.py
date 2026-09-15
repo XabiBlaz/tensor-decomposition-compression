@@ -358,7 +358,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--weights", default="none", choices=["none", "imagenet"], help="Torchvision weights for built-in models. 'imagenet' may download weights if unavailable locally.")
     parser.add_argument("--input-shape", type=parse_input_shape, default=None)
     parser.add_argument("--config", default=None, help="Optional YAML compression config. CLI method/rank flags are ignored when this is set.")
-    parser.add_argument("--method", default="tensor_train", choices=["tensor_train", "partial_tucker", "cp3", "cp2", "tt"])
+    parser.add_argument("--method", default="tensor_train", choices=["tensor_train", "partial_tucker", "cp3", "cp4", "cp2", "svd", "tt"])
     parser.add_argument("--rank", type=parse_rank, default=None)
     parser.add_argument("--rank-method", default="SVD", help="Automatic rank policy when --rank is omitted: SVD, ENTROPY, VBMF, or EVBMF where supported.")
     parser.add_argument("--energy", type=float, default=0.94, help="Energy/entropy threshold used by automatic rank selection.")

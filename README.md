@@ -1,5 +1,9 @@
 # TN Compression
 
+Implementation progress, verified checks and remaining milestones are recorded in
+[the implementation log](docs/implementation-log.md). Source attribution and the
+method reconciliation are documented in [provenance](docs/provenance.md).
+
 Post-training tensor-decomposition compression for PyTorch image models.
 
 TN Compression is a standalone compression lab for already-trained PyTorch models. The intended workflow is:
@@ -116,9 +120,14 @@ Compression policies use `compression.default_method`, `compression.layers`, or 
 
 - `tensor_train` / `tt`: supports `Conv2d` and `Linear`; recommended default.
 - `partial_tucker`: supports `Conv2d`; channel-mode Tucker factorization.
-- `cp3`: supports `Conv2d`; experimental CP/PDP-style convolution decomposition.
-- `cp4`: supports `Conv2d`; alternative CP/PDP decomposition path.
-- `cp2`: supports `Linear` only.
+- `cp3`: supports `Conv2d`; pointwise, spatial depthwise, pointwise execution.
+- `cp4`: supports `Conv2d`; pointwise, vertical depthwise, horizontal depthwise, pointwise execution.
+- `svd` / legacy `cp2`: ordinary matrix SVD, for `Linear` only.
+
+`tensor_train` now uses true TT-matrix contraction for Linear layers. Earlier
+versions used ordinary matrix SVD for most Linear settings; request `svd` to
+retain that representation. CP fitting remains experimental on arbitrary trained
+weights; numerical execution checks do not establish task accuracy.
 
 Unsupported or unsuitable layers are skipped and recorded in `compression_plan.json` and `report.md`. Grouped convolutions are currently skipped.
 
