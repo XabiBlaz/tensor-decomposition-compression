@@ -1,5 +1,11 @@
 seed: 0
 task: causal_lm
+benchmark:
+  input_shape: [1, 64]
+  output_tokens: 16
+  warmup: 1
+  iterations: 3
+  threads: 2
 model:
   source: transformers
   name: Qwen/Qwen2.5-0.5B
