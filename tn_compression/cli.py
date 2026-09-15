@@ -44,6 +44,10 @@ def compression_config(config, output):
 
 
 def evaluate(model, config, role, device):
+    if config.get("task") == "causal_lm":
+        from .tasks.language import evaluate_language, load_text_split
+        batches, identifiers = load_text_split(config, role)
+        return {**evaluate_language(model, batches, device=device), "example_ids": identifiers, "role": role}
     batches = vision_batches(config, role)
     if config.get("task") == "detection":
         from .tasks.detection import evaluate_detection
@@ -69,7 +73,37 @@ def run(args):
     else:
         model = load_bundle(args.checkpoint, device=device)[0] if args.checkpoint else load_model(config["model"]).to(device)
         model.eval()
-        if args.command == "inspect":
+        if args.command == "calibrate":
+            if config.get("task") != "causal_lm":
+                raise ValueError("CLI calibration currently uses the causal-LM adapter; vision has Python task adapters.")
+            from .calibration import collect_linear_inputs
+            from .tasks.language import load_text_split, model_inputs
+            batches, identifiers = load_text_split(config, "calibration")
+            calibration = config.get("calibration", {})
+            layers = calibration.get("layers", [])
+            if not layers:
+                raise ValueError("Select calibration.layers explicitly from inspection.")
+            samples = {}
+            for index, path in enumerate(layers):
+                values = collect_linear_inputs(model, path, batches,
+                       lambda net, batch: net(**model_inputs(batch, device), use_cache=False),
+                       max_rows=calibration.get("max_rows", 256), seed=config.get("seed", 0),
+                       input_mask=lambda batch: batch.get("attention_mask"))
+                filename = f"linear_inputs_{index}.pt"
+                torch.save(values, output / filename)
+                samples[path] = {"shape": list(values.shape), "file": filename}
+            result = {"example_ids": identifiers, "layers": samples, "workflow": config,
+                      "reuse": "Recomputed on every run; stored samples are not an automatic cache."}
+        elif args.command == "plan" and config.get("task") == "causal_lm":
+            from .language_experiments import evaluate_candidates
+            from .tasks.language import load_text_split
+            calibration_batches, calibration_ids = load_text_split(config, "calibration")
+            validation_batches, validation_ids = load_text_split(config, "validation")
+            options = config.get("calibration", {})
+            result = evaluate_candidates(model, calibration_batches, validation_batches, config["candidates"],
+                       device=device, max_rows=options.get("max_rows", 256), seed=config.get("seed", 0))
+            result.update(workflow=config, example_ids={"calibration": calibration_ids, "validation": validation_ids})
+        elif args.command in {"inspect", "plan"}:
             result = generate_compression_plan(model, compression_config(config, output), device=device).plan
         elif args.command == "compress":
             result_object = compress_model(model, compression_config(config, output), inplace=True,
@@ -79,6 +113,8 @@ def run(args):
                 raise ValueError("Compression changed zero layers; see the generated plan and skip reasons.")
             save_bundle(result_object.model, output / "bundle", metadata={"workflow": config, "compression": result["summary"]})
         elif args.command in {"train", "finetune"}:
+            if config.get("task") == "causal_lm":
+                raise ValueError("Language recovery needs an explicit token budget and training policy; it is not yet supported.")
             if args.command == "finetune" and not args.checkpoint:
                 raise ValueError("finetune requires an explicit compressed --checkpoint.")
             from .tasks.vision import train_vision
@@ -90,6 +126,8 @@ def run(args):
         elif args.command == "evaluate":
             result = evaluate(model, config, args.role, device)
         elif args.command == "export":
+            if config.get("task") in {"causal_lm", "detection"}:
+                raise ValueError("ONNX export currently supports classification and segmentation.")
             from .export import export_onnx
             inputs, _ = next(iter(vision_batches(config, args.role)))
             result = export_onnx(model, inputs.to(device), output / "model.onnx")
@@ -103,7 +141,7 @@ def main(argv=None):
     import logging
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Inspect, compress and evaluate configurable PyTorch models.")
-    parser.add_argument("command", choices=["inspect", "compress", "train", "finetune", "evaluate", "export", "benchmark"])
+    parser.add_argument("command", choices=["inspect", "calibrate", "plan", "compress", "train", "finetune", "evaluate", "export", "benchmark"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint")
     parser.add_argument("--output-dir", required=True)
