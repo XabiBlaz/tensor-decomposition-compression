@@ -1,448 +1,222 @@
 # TN Compression
 
-Implementation progress, verified checks and remaining milestones are recorded in
-[the implementation log](docs/implementation-log.md). Source attribution and the
-method reconciliation are documented in [provenance](docs/provenance.md).
+A model-agnostic (within declared capability contracts) compression and inference evaluation toolkit for PyTorch vision models and Hugging Face causal language models.
 
-Post-training tensor-decomposition compression for PyTorch image models.
+TN Compression turns a trained model into a reproducible engineering artifact:
 
-TN Compression is a standalone compression lab for already-trained PyTorch models. The intended workflow is:
+1. construct and inspect a model;
+2. collect bounded calibration data;
+3. score candidate transformations;
+4. apply tensor decomposition, quantization, low-rank approximation, or structured pruning;
+5. fine-tune when requested;
+6. save a self-describing checkpoint bundle;
+7. validate quality and measure real deployment cost.
 
-1. Inspect a model before compression.
-2. Decide whether to compress all eligible layers, specific layers, or layer groups.
-3. Apply tensor-decomposition compression.
-4. Inspect the compressed model with output drift, representation similarity, and a small SAE-based activation diagnostic.
+The project is designed to answer a practical research question: **which transformation gives the best qualityâ€“sizeâ€“latency trade-off for this model, task, hardware target, and serving backend?**
 
-The project does not train or fine-tune task models. Compression can reduce parameter count, but a real model still needs task-specific evaluation after compression.
+*This README describes the final interface and experimental design. Development history and claim-by-claim validation evidence live in* [docs/implementation-log.md](docs/implementation-log.md).
 
-## Repository Layout
+## What the project provides
+
+- A single Python API and `tn-compress` CLI for inspection, compression, training, fine-tuning, evaluation, export, and benchmarking.
+- Explicit capability checks for model Ã— method Ã— task Ã— backend combinations.
+- One lifecycle for vision and language models, with task-specific evaluators.
+- Portable checkpoint bundles that preserve the exact resolved transformation.
+- Isolated-process measurements for parameters, artifact bytes, memory, latency, and throughput.
+- Reproducible configurations, seeds, raw results, plots, and provenance.
+
+The toolkit is intentionally open to user-supplied models. The benchmark models are small, stable fixtures; they are examples for comparison, not an allowlist.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A[Model loader] --> B[Inspect and calibrate]
+  B --> C[Plan candidates]
+  C --> D[Apply transformation]
+  D --> E[Save and reload bundle]
+  E --> F[Evaluate quality]
+  E --> G[Benchmark backend]
+  F --> H[Report trade-offs]
+  G --> H
+```
+
+The layers are separate:
+
+| Layer | Responsibility |
+| --- | --- |
+| Model loaders | Build a model from TorchVision, SMP, PyTorch Hub, Transformers, or a custom factory. |
+| Task adapters | Define inputs, targets, outputs, losses, and metrics for classification, segmentation, detection, and causal language modeling. |
+| Compression methods | Implement decompositions, low-rank transforms, quantization, and structured pruning with explicit module support. |
+| Calibration and allocation | Collect bounded data, estimate local damage, enforce budgets, and choose candidates. |
+| Checkpoints | Serialize weights plus the construction recipe and resolved transformation metadata. |
+| Runtimes | Execute PyTorch, ONNX Runtime, and supported vLLM paths; optional SGLang/TensorRT integrations remain backend-specific. |
+| Reporting | Produce machine-readable results and human-readable comparisons without hiding failed or slower configurations. |
+
+## Supported model inputs
+
+Use a model identifier, a local constructor, or an importable factory. The loader records the source and revision so an experiment can be recreated.
+
+| Source | Typical input | Notes |
+| --- | --- | --- |
+| TorchVision | Model name and explicit weights | Classification and detection models from the TorchVision registry. See the [TorchVision model docs](https://docs.pytorch.org/vision/stable/models.html). |
+| Segmentation Models PyTorch | Architecture, encoder, weights, and decoder settings | SMP classification, segmentation, and encoderâ€“decoder models. See the [SMP model docs](https://smp.readthedocs.io/en/latest/models.html). |
+| PyTorch Hub | Repository, entrypoint, and pinned ref or local cache | Hub models are arbitrary PyTorch modules; the loader preserves the source information. See the [PyTorch Hub docs](https://docs.pytorch.org/docs/2.14/hub.html). |
+| Hugging Face Transformers | Model id or local path plus pinned revision | Causal language models through `AutoModelForCausalLM`; tokenizer and revision are part of the bundle. See the [Transformers Auto docs](https://huggingface.co/docs/transformers/model_doc/auto). |
+| Custom | Import path to a factory and serialized constructor arguments | Use this for private, research, or application-specific `nn.Module` implementations. |
+
+â€œAny modelâ€ means any model that satisfies the selected contract, not that every method can safely rewrite every module. Ordinary `Conv2d` and `Linear` paths are generic. Functional layers, fused kernels, tied weights, grouped/depthwise convolutions, custom attention, and unusual tensor layouts require a registered handler or explicit protection. Unsupported modules are reported and left unchanged; they are never silently approximated.
+
+## Tasks and evaluation
+
+### Classification
+
+Accepts image tensors and label targets. Reports loss, top-1/top-k accuracy, parameter count, artifact size, and latency distributions.
+
+### Semantic segmentation
+
+Supports binary and multiclass masks, including Oxford-IIIT Pet trimaps. Reports mean IoU, per-class IoU, Dice, loss, and the contribution of protected stem/head layers to total size.
+
+### Object detection
+
+Supports models with variable-size image lists and structured outputs (boxes, labels, and scores). Reports validation loss where available and COCO-style AP/AP50 on a declared dataset or fixture. Detection handlers preserve post-processing and output contracts.
+
+### Causal language modeling
+
+Uses tokenized text with attention and label masks. Reports token-level negative log-likelihood, perplexity, teacher-model KL divergence, and optional downstream task scores. Calibration and evaluation datasets, tokenizer revisions, sequence lengths, and masks are recorded.
+
+## Compression methods
+
+Each method declares the module types, tensor layouts, dtypes, and runtimes it supports.
+
+| Method | Primary scope | Engineering note |
+| --- | --- | --- |
+| Tensor Train / TTPWT | `Conv2d` and `Linear` | Factorized execution with device, dtype, stride, padding, bias, and rectangular-kernel checks. |
+| Partial Tucker | `Conv2d` | Decomposes selected channel modes while preserving protected layers and external shapes. |
+| CP (CP3/CP4) | Selected convolutional layers | Experimental variants remain explicitly named and validated against their documented execution. |
+| SVD / weighted SVD | `Linear` and compatible projections | Dense low-rank replacement with optional activation-weighted error. |
+| Activation-aware low rank | Calibrated linear projections | Uses input statistics to screen candidates; claims are separated from the underlying SVD implementation. |
+| Quantization | Linear and convolutional weights, as supported | Includes a reference round-to-nearest path and deployable GPTQ/AWQ integrations where the backend supports them. Packed storage and kernel speedups are measured, not assumed. |
+| Structured pruning | Gated MLP blocks | Physically removes compatible intermediate channels across gate/up/down projections. Widths, indices, and architecture handlers are recorded. |
+| Wanda / SparseGPT baselines | Language-model weight sparsity | Optional comparison methods; zero counts are not presented as speedups without a sparse runtime measurement. |
+
+The public API keeps method implementations reusable while task workflows, reports, and CLI presentation stay separate.
+
+## How compression decisions are made
+
+CKA and raw gradient diagnostics are available as descriptive analyses, but they are not used as stand-alone damage predictors. A candidate transformation follows this policy:
+
+1. **Local screening.** On bounded calibration batches, compare the original and candidate module outputs. For a linear module, the default score is an activation-weighted reconstruction estimate such as `E_local = mean(||(W - W_hat) X||_2^2)`, with layer dimensions and calibration statistics recorded.
+2. **Actual intervention.** Materialize the candidate in a copy of the model and measure task loss, output KL, or the task metric (IoU, AP, accuracy, or language-model NLL).
+3. **Budget allocation.** Select candidates against an explicit parameter/byte/latency budget using measured marginal damage. Protected layers and unsupported modules are constraints.
+4. **Cumulative validation.** Re-evaluate the complete transformed model after each accepted group. Roll back candidates that violate the quality constraint or fail runtime validation.
+5. **Final report.** Publish local scores alongside actual quality deltas and resource measurements so correlations can be inspected rather than assumed.
+
+This makes the diagnostics useful for directing work while keeping the claim tied to end-to-end evidence.
+
+## Checkpoint bundles and portability
+
+A bundle contains:
+
+- model family, source, constructor arguments, and pinned revisions;
+- weights and checksums;
+- resolved decomposition factors/ranks, pruning indices, or quantization scales;
+- preprocessing, tokenizer, class mappings, and output schema;
+- calibration and training settings, seeds, and fine-tuning policy;
+- the transformation graph and package version.
+
+Reloading a bundle reconstructs the resolved model directly; it does not rerun rank selection or decomposition. A custom model is portable when its factory and output contract are available. Full-module loading remains supported for legacy checkpoints, but new experiments should use bundles.
+
+Fine-tuning policies support the full model, decoder/head-only, or explicit parameter selections. The optimizer is created after compression and freezing so that only intended parameters are updated.
+
+## Quickstart
+
+Python 3.11 is the reference environment (the package declares Python 3.9 or newer).
+
+Install the core package and test dependencies:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[test]"
+```
+
+Install optional extras only for the workflow you need:
+
+```bash
+pip install -e ".[vision]"       # TorchVision/SMP workflows
+pip install -e ".[language]"     # Transformers and language evaluation
+pip install -e ".[deployment]"  # ONNX Runtime and deployment measurements
+```
+
+Run an offline synthetic lifecycle:
+
+```bash
+tn-compress train --config examples/configs/segmentation-synthetic.yaml --output-dir runs/demo/train --device cpu
+tn-compress inspect --config examples/configs/segmentation-synthetic.yaml --checkpoint runs/demo/train/bundle --output-dir runs/demo/inspect --device cpu
+tn-compress compress --config examples/configs/segmentation-synthetic.yaml --checkpoint runs/demo/train/bundle --output-dir runs/demo/compressed --device cpu
+tn-compress evaluate --checkpoint runs/demo/compressed/bundle --config examples/configs/segmentation-synthetic.yaml --output-dir runs/demo/evaluate --role validation --device cpu
+```
+
+For a user-supplied model, provide a loader specification and task contract in YAML, then run `inspect` before selecting a method. The inspector reports supported and protected modules, tensor shapes, parameter counts, and reasons a transformation is unavailable.
+
+Language experiments use the same lifecycle. A typical configuration pins a Hugging Face model revision, tokenizer, calibration text, sequence length, candidate projection, quantization/pruning method, and evaluation budget. vLLM serving is enabled only for representations and quantization formats it can load; custom factorized or structurally pruned models use a project runtime adapter until a native backend exists.
+
+## Benchmark protocol
+
+The benchmark suite is deliberately small enough for CI and reproducible research, while the API accepts larger user models.
+
+Vision fixtures include:
+
+- U-Net/ResNet34, FPN/ResNet18, and U-Net/MobileNetV2 on Oxford-IIIT Pet segmentation;
+- small TorchVision classification and detection models for contract tests and comparison;
+- synthetic offline data for fast lifecycle tests.
+
+Language fixtures use pinned small causal language models, with a Qwen-family pilot as one reproducible example. They compare weighted low rank, quantization, structured gated-MLP pruning, and sparsity baselines where the model and runtime support them.
+
+Every study records:
+
+- model/data/code revisions, split identifiers, seeds, precision, and configuration;
+- mean and spread across seeds;
+- parameters, serialized bytes, CPU RSS, CUDA allocated/reserved memory;
+- latency distributions, throughput, time-to-first-token, and time-per-output-token where applicable;
+- PyTorch CPU/CUDA results and ONNX Runtime CPU results for vision;
+- vLLM results only for compatible language representations and quantization formats.
+
+Measurements run in isolated processes with declared hardware, thread counts, warmup, repetitions, and CUDA synchronization. Model loading is reported separately from steady-state inference. ONNX outputs are checked against PyTorch before runtime numbers are published. Failed configurations and regressions remain in the raw results.
+
+## Repository guide
 
 ```text
-tn_compression/       # reusable compression library
-compression/          # command-line workflows and reports
-compression/configs/  # editable example compression configs
-tests/                # fast regression tests
-environment.yml       # small CPU/GPU-capable environment
+tn_compression/              # reusable public Python package
+  api.py                     # inspect, plan, apply, and compress entry points
+  models.py                  # configurable model construction and provenance
+  config.py                  # YAML configuration loading and validation
+  artifacts.py               # device and artifact utilities
+  decompositions/            # TT/TTPWT, Tucker, CP, and low-rank implementations
+  pruning.py                 # structured language-model pruning
+  quantization.py            # reference and backend-aware quantization
+  calibration.py             # bounded data collection and local error scores
+  allocation.py              # resource-aware candidate selection
+  checkpoints.py             # portable checkpoint bundles
+  tasks/                     # vision, detection, language, and recovery contracts
+  benchmark.py                # isolated PyTorch measurements
+  export.py                  # ONNX export and parity helpers
+  language_experiments.py    # language candidate evaluation and pilots
+  serving.py                 # streaming clients and serving metrics
+compression/                 # workflow and report helpers retained for compatibility
+examples/configs/            # synthetic, vision, language, and serving configurations
+tests/                       # numerical, lifecycle, parity, and contract regression tests
+docs/                        # workflows, language, serving, provenance, and implementation history
+containers/                  # research and serving Docker images
 ```
 
-## Installation
-
-Create the environment:
-
-```bash
-conda env create -f environment.yml
-conda activate tn-compression
-```
-
-All commands support:
-
-```text
---device cpu      # force CPU
---device auto     # use CUDA if available, otherwise CPU
---device cuda     # require CUDA
---device cuda:0   # require a specific CUDA device
-```
-
-## Supported Models
-
-The model choices:
-
-- `torchvision_resnet18`
-- `torchvision_vgg16`
-- `artifact`
-
-Torchvision models support:
-
-```text
---weights none       # random initialization, no download; default
---weights imagenet   # ImageNet pretrained torchvision weights; may download once
-```
-
-When `--weights imagenet` is used, the standard 1000-class ImageNet head is kept. With `--weights none`, `--num-classes` can change the classifier output size.
-
-In case you want to compress any model of your choice, use `--model artifact`. Artifact mode loads a full serialized `torch.nn.Module`, not a state dict:
-
-```bash
-python compression/compress_model.py \
-  --model artifact \
-  --artifact-path ./model.pt \
-  --input-shape 1,3,224,224 \
-  --method tensor_train \
-  --device auto
-```
-
-The full module is required because compression needs to inspect and replace submodules.
-
-Full-module artifacts also require the original Python module/class definitions to be importable at load time. If `torch.load` fails with a missing module error, install that dependency or add the original model definition to the Python path before using artifact mode.
-
-## Start Here
-
-Run these three commands first:
-
-```bash
-python compression/analyze_compression_plan.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --device auto
-
-python compression/compress_model.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --rank-method SVD \
-  --energy 0.94 \
-  --device auto
-
-python compression/representation_analysis.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --rank-method SVD \
-  --energy 0.94 \
-  --device auto
-```
-
-Use `--config compression/configs/grouped_layers.yaml` after inspection when you want CKA/Fisher-Jenks groups from `segments.json` to control compression.
-
-## Input Shape
-
-`--input-shape` is the tensor shape passed to `model(x)`, including batch size:
-
-```text
-1,3,224,224
-```
-
-It is needed for commands that run a forward pass: latency, output drift, CKA, representation analysis, and SAE activation collection. Torchvision models default to `1,3,224,224`. Artifact mode tries common image shapes automatically, but pass `--input-shape` for non-standard models.
-
-## Tensor Decompositions
-
-Compression policies use `compression.default_method`, `compression.layers`, or `compression.groups` in YAML config.
-
-- `tensor_train` / `tt`: supports `Conv2d` and `Linear`; recommended default.
-- `partial_tucker`: supports `Conv2d`; channel-mode Tucker factorization.
-- `cp3`: supports `Conv2d`; pointwise, spatial depthwise, pointwise execution.
-- `cp4`: supports `Conv2d`; pointwise, vertical depthwise, horizontal depthwise, pointwise execution.
-- `svd` / legacy `cp2`: ordinary matrix SVD, for `Linear` only.
-
-`tensor_train` now uses true TT-matrix contraction for Linear layers. Earlier
-versions used ordinary matrix SVD for most Linear settings; request `svd` to
-retain that representation. CP fitting remains experimental on arbitrary trained
-weights; numerical execution checks do not establish task accuracy.
-
-Unsupported or unsuitable layers are skipped and recorded in `compression_plan.json` and `report.md`. Grouped convolutions are currently skipped.
-
-## Tensor Train Structure And Rank Selection
-
-Tensor Train structure controls how a compressed Conv2d is represented:
-
-- `TTPWT`: pointwise, vertical, horizontal, pointwise convolution sequence. This is the recommended deployment-oriented default.
-- `PLAIN_TT`: original TT-style wrapper that stores TT cores and reconstructs the convolution weight.
-
-When you pass `--method tensor_train`, the default Conv2d structure is `TTPWT`. Select it explicitly with `--structure TTPWT`, or use the direct TT wrapper with `--structure PLAIN_TT`. The `--structure` flag mainly affects Conv2d layers; Linear layers use the linear TT decomposition path.
-
-Rank selection controls how many latent dimensions are kept:
-
-- Fixed rank: `--rank 8` or `--rank 4,8,8`.
-- `SVD`: keeps the smallest rank that reaches the requested spectral energy threshold.
-- `ENTROPY`: follows singular-value entropy/concentration.
-- `VBMF` / `EVBMF`: Bayesian matrix-factorization rank estimates where implemented.
-- `rank_cap` / `--rank-cap`: optional maximum automatic rank. Use `null` in YAML, or `--rank-cap 0` on the CLI, when you want the energy/rank-selection method to decide without a hard ceiling.
-
-Example:
-
-```bash
-python compression/compress_model.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --structure TTPWT \
-  --rank-method SVD \
-  --energy 0.94 \
-  --rank-cap 8
-```
-
-## Configuration Vs Plan
-
-You edit YAML configs. The library generates `compression_plan.json`.
-
-```text
-YAML config -> generate_compression_plan(...) -> compression_plan.json -> apply_compression_plan(...)
-```
-
-Important: YAML files do not affect compression unless you pass them with `--config`. Without `--config`, the command ignores the YAML files and builds an in-memory config from CLI flags such as `--method`, `--rank`, `--rank-method`, `--energy`, and `--rank-cap`.
-
-```bash
-python compression/compress_model.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --config compression/configs/individual_layers.yaml \
-  --device auto
-```
-
-Example configs:
-
-```text
-compression/configs/default_all.yaml
-compression/configs/individual_layers.yaml
-compression/configs/grouped_layers.yaml
-```
-
-`compression_plan.json` records every inspected leaf layer, eligibility, selected policy, skip reasons, and estimated compression ratio when available.
-
-## 1. Inspect Before Compressing
-
-This does not compress the model:
-
-```bash
-python compression/analyze_compression_plan.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --device auto
-```
-
-Use ImageNet weights when you want inspection on pretrained representations:
-
-```bash
-python compression/analyze_compression_plan.py \
-  --model torchvision_resnet18 \
-  --weights imagenet \
-  --device auto
-```
-
-For an artifact:
-
-```bash
-python compression/analyze_compression_plan.py \
-  --model artifact \
-  --artifact-path ./model.pt \
-  --input-shape 1,3,224,224 \
-  --device auto
-```
-
-Outputs in `compression/outputs/`:
-
-- `precompression_analysis.json`
-- `precompression_report.md`
-- `params_per_layer.png`
-- `cka_heatmap.png` when activation probes run
-- `activation_effective_rank.png` when activation probes run
-- `cka_groups.png` when CKA grouping runs
-- `segments.json` with CKA-based layer groups
-
-How to read this:
-
-- Large parameter layers usually matter most for compression ratio.
-- Low activation effective rank may indicate redundancy.
-- High CKA between nearby layers can suggest redundant representation geometry.
-
-CKA grouping works by collecting activations from eligible probed layers, flattening each activation into a matrix, and computing pairwise linear CKA. By default, the pairwise CKA scores are segmented with Fisher-Jenks natural breaks, and the lower edge of the highest-similarity class becomes the grouping threshold. Layers connected by CKA scores above that threshold become connected components, which are written to `segments.json`.
-
-This is better than a fixed threshold when you do not know the CKA scale beforehand, because the cutoff adapts to the trained model's observed CKA distribution. You can still force a manual cutoff with `--cka-threshold 0.90`. With synthetic inputs it is still a diagnostic; for stronger decisions, run the same inspection with representative data or a representative artifact input pipeline.
-
-## 2. Configure Compression
-
-Global policy: compress every eligible layer with one method.
-
-```yaml
-compression:
-  mode: default_all
-  default_method:
-    type: tensor_train
-    structure: TTPWT
-    method: SVD
-    energy: 0.94
-    rank: null
-    rank_cap: null
-```
-
-Individual policy: explicitly target layer names from the inspection report.
-
-```yaml
-compression:
-  mode: individual
-  layers:
-    conv1:
-      type: tensor_train
-      structure: TTPWT
-      method: SVD
-      energy: 0.98
-      rank: null
-      rank_cap: null
-    layer1/0/conv1:
-      type: tensor_train
-      structure: TTPWT
-      rank: 4
-    fc:
-      type: cp2
-      rank: 8
-```
-
-Grouped policy: use CKA-based `segments.json` from inspection and assign policies by group.
-
-```yaml
-compression:
-  mode: cka_groups
-  analysis_dir: compression/outputs
-  groups:
-    group_0:
-      type: tensor_train
-      structure: TTPWT
-      method: SVD
-      energy: 0.90
-      rank: null
-      rank_cap: null
-    group_1:
-      type: tensor_train
-      structure: TTPWT
-      method: SVD
-      energy: 0.94
-      rank: null
-      rank_cap: null
-    group_2: skip
-```
-
-Layer names can use `/` or `.` separators. For example, `layer1/0/conv1` and `layer1.0.conv1` refer to the same submodule.
-
-## 3. Compress
-
-Global CLI run:
-
-```bash
-python compression/compress_model.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --rank-method SVD \
-  --energy 0.94 \
-  --device auto
-```
-
-VGG-16:
-
-```bash
-python compression/compress_model.py \
-  --model torchvision_vgg16 \
-  --weights none \
-  --method tensor_train \
-  --rank-method SVD \
-  --energy 0.94 \
-  --device auto
-```
-
-Config-driven run:
-
-```bash
-python compression/compress_model.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --config compression/configs/individual_layers.yaml \
-  --device auto
-```
-
-Dry-run plan:
-
-```bash
-python compression/compress_model.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --rank 8 \
-  --dry-run-plan \
-  --device auto
-```
-
-Save compressed state dict:
-
-```bash
-python compression/compress_model.py \
-  --model artifact \
-  --artifact-path ./model.pt \
-  --input-shape 1,3,224,224 \
-  --config compression/configs/default_all.yaml \
-  --save-model \
-  --device auto
-```
-
-Outputs:
-
-- `summary.json`
-- `report.md`
-- `compression_plan.json`
-- optional `compression_summary.png`
-- optional compressed state dict with `--save-model`
-
-## 4. Post-Compression Representation Analysis
-
-This compares original and compressed activations. It is not fine-tuning and not proof of task accuracy.
-
-```bash
-python compression/representation_analysis.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --rank-method SVD \
-  --energy 0.94 \
-  --device auto
-```
-
-Interpretation:
-
-- CKA near `1.0`: similar activation geometry on probed inputs.
-- CKA near `0.0`: representation geometry changed strongly.
-- Lower relative L2 activation drift is better.
-- Effective-rank changes show whether activations became more or less concentrated.
-
-## 5. SAE Post-Compression Demo
-
-The SAE demo trains a tiny sparse autoencoder on activations collected from the compressed model. It is a diagnostic bridge to sparse-feature workflows, not a model repair method.
-
-```bash
-python compression/sae_postcompression.py \
-  --model torchvision_resnet18 \
-  --weights none \
-  --method tensor_train \
-  --rank-method SVD \
-  --energy 0.94 \
-  --steps 100 \
-  --l1-coef 1e-3 \
-  --device auto
-```
-
-Metrics:
-
-- Reconstruction error: how well the SAE reconstructs compressed activations.
-- Explained variance: fraction of activation variance captured by the SAE reconstruction.
-- Mean L0: average active latents per activation vector.
-- Dead latent fraction: unused latent capacity.
-- Latent activation sparsity: fraction of inactive latent entries.
-- Original-vs-compressed CKA: activation geometry change before SAE training.
-
-This demo does not claim monosemanticity or semantic feature discovery.
-
-## Python API
-
-```python
-from tn_compression.api import compress_model, generate_compression_plan
-from tn_compression.config import load_config
-
-config = load_config("compression/configs/default_all.yaml")
-plan = generate_compression_plan(model, config, device="auto")
-result = compress_model(model, config, inplace=False, device="auto", return_model=True)
-compressed_model = result.model
-```
-
-Use `generate_compression_plan` to inspect eligibility and skip reasons before mutating a model. Use `compress_model` when you want the compressed model and configured artifacts.
-
-## Verify
-
-Fast CPU checks:
-
-```bash
-python -m compileall tn_compression compression tests
-python compression/analyze_compression_plan.py --model torchvision_resnet18 --weights none --input-shape 1,3,64,64 --max-layers 6
-python compression/compress_model.py --model torchvision_resnet18 --weights none --num-classes 10 --input-shape 1,3,64,64 --method tensor_train --rank 2 --latency-runs 1 --warmup-runs 0
-python compression/compress_model.py --model torchvision_resnet18 --weights none --num-classes 10 --input-shape 1,3,64,64 --config compression/configs/individual_layers.yaml --latency-runs 1 --warmup-runs 0
-python compression/representation_analysis.py --model torchvision_resnet18 --weights none --num-classes 10 --input-shape 2,3,64,64 --method tensor_train --rank 2 --batch-size 2 --batches 1 --max-layers 3
-python compression/sae_postcompression.py --model torchvision_resnet18 --weights none --num-classes 10 --input-shape 2,3,64,64 --rank 2 --steps 20 --batch-size 2 --batches 1 --max-layers 3
-python -m pytest -q
-```
+Start with [docs/workflows.md](docs/workflows.md) for the end-to-end lifecycle, then read [docs/language.md](docs/language.md) for causal-LM experiments and [docs/serving.md](docs/serving.md) for runtime measurements. [docs/provenance.md](docs/provenance.md) explains inherited code, integrations, fixes, and experiment ownership.
+
+## Reproducibility, safety, and scope
+
+- CI is CPU-only, offline, and uses small fixtures. GPU, ONNX, and serving studies run as separate jobs with their environment recorded.
+- Compression is not a safety guarantee. The toolkit can compare output drift, calibration behavior, and selected robustness checks, but it does not establish alignment or model safety.
+- Safety-oriented evaluation should be a separate project or an explicitly scoped extension (for example, agent reliability and oversight experiments) with its own threat model and benchmarks.
+- Established algorithms are attributed to their original publications and upstream projects. Integration code, fixes, tests, and measurements are identified separately.
+- Contributions should add a capability contract, focused regression tests, a reproducible configuration, and measured evidence for any performance claim.
