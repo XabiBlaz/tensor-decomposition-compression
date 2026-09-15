@@ -101,11 +101,15 @@ def text_records(config):
     roles = ("calibration", "validation", "test")
     if data["kind"] == "text_json":
         records = json.loads(Path(data["path"]).read_text())
+        if "train" in records:
+            roles = (*roles, "train")
     elif data["kind"] == "huggingface":
         from datasets import load_dataset
         if not re.fullmatch(r"[0-9a-f]{40}", data.get("revision", "")):
             raise ValueError("Pin a full Hugging Face dataset revision.")
         splits = data["splits"]
+        if "train" in splits:
+            roles = (*roles, "train")
         # Split expressions can alias rows (train[:10] and train[:20]); require
         # canonical partitions here. Use explicit IDs in text_json for subsets.
         if any(not re.fullmatch(r"[A-Za-z0-9_]+", splits[role]) for role in roles):
