@@ -1,6 +1,7 @@
 """Portable architecture recipes and tensor-only state for compressed models."""
 
 import hashlib
+import copy
 import json
 from pathlib import Path
 
@@ -75,6 +76,16 @@ def save_bundle(model, path, *, model_spec=None, metadata=None):
     spec = model_spec or getattr(model, "_tn_model_spec", None)
     if spec is None:
         raise ValueError("Supply model_spec, including a custom source when using a reconstruction factory.")
+    spec = copy.deepcopy(spec)
+    if spec.get("source") == "transformers":
+        # Config serialization alone can change sdpa to eager on reconstruction.
+        spec.setdefault("kwargs", {})["attn_implementation"] = model.config._attn_implementation
+    state = {name: value.detach().cpu() for name, value in model.state_dict().items()}
+    nonpersistent = []
+    for name, value in model.named_buffers():
+        if name not in state:
+            nonpersistent.append(name)
+            state[name] = value.detach().cpu()
     replacements = []
     for name, module in model.named_modules():
         if getattr(module, "_tn_replacement", False):
@@ -84,6 +95,8 @@ def save_bundle(model, path, *, model_spec=None, metadata=None):
     manifest = {
         "schema_version": SCHEMA_VERSION, "model": spec, "replacements": replacements,
         "metadata": metadata or {}, "torch_version": str(torch.__version__),
+        "transformations": getattr(model, "_tn_transformations", []),
+        "nonpersistent_buffers": nonpersistent,
         "training": {name: module.training for name, module in model.named_modules()},
         "requires_grad": {name: parameter.requires_grad for name, parameter in model.named_parameters()},
     }
@@ -91,7 +104,7 @@ def save_bundle(model, path, *, model_spec=None, metadata=None):
     json.dumps(manifest)
     path.mkdir(parents=True, exist_ok=True)
     weights = path / "weights.pt"
-    torch.save({name: value.detach().cpu() for name, value in model.state_dict().items()}, weights)
+    torch.save(state, weights)
     manifest["weights_sha256"] = file_digest(weights)
     (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
@@ -121,10 +134,16 @@ def load_bundle(path, *, factory=None, device="cpu"):
     for name, tensor in [*model.named_parameters(), *model.named_buffers()]:
         if name in state:
             tensor.data = tensor.data.to(dtype=state[name].dtype)
+    buffers = dict(model.named_buffers())
+    for name in manifest.get("nonpersistent_buffers", []):
+        if name not in buffers or buffers[name].shape != state[name].shape:
+            raise ValueError(f"Cannot reconstruct nonpersistent buffer {name}.")
+        buffers[name].copy_(state.pop(name))
     model.load_state_dict(state, strict=True)
     for name, parameter in model.named_parameters():
         parameter.requires_grad_(manifest["requires_grad"][name])
     for name, module in model.named_modules():
         module.training = manifest["training"][name]
     model.to(device)
+    model._tn_transformations = manifest.get("transformations", [])
     return model, manifest

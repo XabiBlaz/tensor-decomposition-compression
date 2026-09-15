@@ -57,3 +57,17 @@ def test_local_hub_loader_uses_entrypoint_contract(tmp_path):
     assert isinstance(load_model(spec), nn.Linear)
     with pytest.raises(ValueError, match="wrapper"):
         load_model({**spec, "name": "wrapped"})
+def test_transformer_bundle_preserves_attention_backend_and_rotary_buffers(tmp_path):
+    pytest.importorskip("transformers")
+    model = load_model({"source": "transformers", "config": {
+        "model_type": "qwen2", "hidden_size": 16, "intermediate_size": 32,
+        "num_hidden_layers": 1, "num_attention_heads": 2, "num_key_value_heads": 2, "vocab_size": 32}}).double().eval()
+    model._tn_model_spec["config"] = model.config.to_dict()
+    save_bundle(model, tmp_path / "bundle")
+    restored, _ = load_bundle(tmp_path / "bundle")
+    assert restored.config._attn_implementation == model.config._attn_implementation
+    assert restored.model.rotary_emb.inv_freq.dtype == torch.float64
+    tokens = torch.tensor([[1, 2, 3]])
+    with torch.no_grad():
+        torch.testing.assert_close(model(tokens).logits, restored(tokens).logits, rtol=0, atol=0)
+
