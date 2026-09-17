@@ -14,6 +14,19 @@ from .config import load_config
 from .models import load_model
 
 
+def analysis_batches(config, role):
+    if config.get("task") == "causal_lm":
+        from .tasks.language import load_text_split
+        return load_text_split(config, role)
+    batches = vision_batches(config, role)
+    dataset = batches.dataset
+    identifiers = getattr(dataset, "identifiers", None)
+    if identifiers is None:
+        identifiers = [f"{config.get('data', {}).get('kind', 'data')}:{role}:{index}"
+                       for index in range(len(dataset))]
+    return batches, identifiers
+
+
 def vision_batches(config, role):
     from .tasks.data import CocoDetectionDataset, OxfordPetDataset, SyntheticVisionDataset
     from .tasks.detection import detection_collate
@@ -73,7 +86,38 @@ def run(args):
     else:
         model = load_bundle(args.checkpoint, device=device)[0] if args.checkpoint else load_model(config["model"]).to(device)
         model.eval()
-        if args.command == "calibrate":
+        if args.command == "analyze":
+            from .analyzer.reporting import write_analysis_artifacts
+            from .analyzer.service import analyze_model
+            analysis = config.get("analysis", {})
+            level = args.level or analysis.get("level", "structural")
+            calibration_batches = validation_batches = calibration_ids = None
+            detection_coco = None
+            if level in {"calibrated", "validated"}:
+                calibration_batches, calibration_ids = analysis_batches(config, "calibration")
+            if level == "validated":
+                validation_batches, _ = analysis_batches(config, "validation")
+                if config.get("task") == "detection":
+                    detection_coco = validation_batches.dataset.coco
+            target_mb = args.target_size_mb
+            if target_mb is None:
+                target_mb = analysis.get("target_size_mb")
+            max_quality_loss = args.max_quality_loss
+            if max_quality_loss is None:
+                max_quality_loss = analysis.get("max_quality_loss")
+            report = analyze_model(
+                model, config, level=level,
+                calibration_batches=calibration_batches,
+                validation_batches=validation_batches,
+                calibration_ids=calibration_ids,
+                target_size_bytes=round(target_mb * 1024 * 1024) if target_mb is not None else None,
+                max_quality_loss=max_quality_loss,
+                requested_backend=args.backend or analysis.get("backend", "pytorch"),
+                device=device, detection_coco=detection_coco)
+            paths = write_analysis_artifacts(report, output)
+            result = report.to_dict()
+            result["artifacts"] = paths
+        elif args.command == "calibrate":
             if config.get("task") != "causal_lm":
                 raise ValueError("CLI calibration currently uses the causal-LM adapter; vision has Python task adapters.")
             from .calibration import collect_linear_inputs
@@ -106,6 +150,15 @@ def run(args):
             result.update(workflow=config, example_ids={"calibration": calibration_ids, "validation": validation_ids})
         elif args.command in {"inspect", "plan"}:
             result = generate_compression_plan(model, compression_config(config, output), device=device).plan
+        elif args.command == "compress" and args.plan:
+            from .analyzer.service import apply_compression_plan
+            plan = json.loads(Path(args.plan).read_text())
+            calibration_batches = None
+            if any(item.get("method") == "weighted_svd" for item in plan.get("transformations", [])):
+                calibration_batches, _ = analysis_batches(config, "calibration")
+            result = apply_compression_plan(model, plan, config,
+                                            calibration_batches=calibration_batches, device=device)
+            save_bundle(model, output / "bundle", metadata={"workflow": config, "analysis_plan": plan})
         elif args.command == "compress" and config.get("allocation"):
             from .allocation import allocate_ranks
             from .tasks.language import load_text_split
@@ -186,12 +239,17 @@ def main(argv=None):
     import logging
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Inspect, compress and evaluate configurable PyTorch models.")
-    parser.add_argument("command", choices=["inspect", "calibrate", "plan", "compress", "train", "finetune", "evaluate", "export", "benchmark"])
+    parser.add_argument("command", choices=["inspect", "calibrate", "analyze", "plan", "compress", "train", "finetune", "evaluate", "export", "benchmark"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--role", choices=["calibration", "validation", "test"], default="validation")
+    parser.add_argument("--level", choices=["structural", "calibrated", "validated"])
+    parser.add_argument("--target-size-mb", type=float)
+    parser.add_argument("--max-quality-loss", type=float)
+    parser.add_argument("--backend")
+    parser.add_argument("--plan", help="Compression plan produced by tn-compress analyze.")
     args = parser.parse_args(argv)
     print(json.dumps(run(args), indent=2))
 
