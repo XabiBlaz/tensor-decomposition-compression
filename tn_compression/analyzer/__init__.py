@@ -2,7 +2,9 @@
 
 from .candidates import generate_candidates, model_fingerprint
 from .schema import AnalysisReport, CandidateResult, capability
+from .service import analyze_model, apply_compression_plan, pareto_candidates
 
 __all__ = [
-    "AnalysisReport", "CandidateResult", "capability", "generate_candidates", "model_fingerprint",
+    "AnalysisReport", "CandidateResult", "analyze_model", "apply_compression_plan", "capability",
+    "generate_candidates", "model_fingerprint", "pareto_candidates",
 ]
