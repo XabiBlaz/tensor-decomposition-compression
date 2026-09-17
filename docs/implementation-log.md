@@ -53,3 +53,22 @@ See `language.md` for reproduction and limitations. The eight-example pilot is
 complete; downstream tasks, cross-domain evaluation and wider sampling remain
 research milestones. The Pet baseline has now finished 30 epochs; compressed
 public-data comparisons remain pending.
+
+## Damage-aware analyzer engineering milestone
+
+Added a shared candidate schema and model fingerprint, bounded automatic
+candidate generation, deterministic linear/MLP and convolution feature-map
+calibration, within-layer Pareto filtering, task-level intervention measurement,
+greedy cumulative selection and rollback. The analyzer leaves the supplied model
+unchanged and writes a plan consumed by `tn-compress compress --plan`.
+
+The CLI writes machine-readable evidence, a text summary and a standalone HTML
+report. Offline synthetic tests cover identifiers, legal generation, protected
+and unsupported modules, calibration bounds, normalized error, restoration,
+vision and language task evidence, dominance, cumulative rejection and plan
+application. The experiment script records provenance, preserves logs, resumes
+completed stages and keeps model/dataset downloads disabled.
+
+No research sweep, public-data experiment, model download, GPU job or performance
+benchmark was run for this milestone. Published quality and deployment claims
+still require the user-operated experiment suites and backend-specific validation.

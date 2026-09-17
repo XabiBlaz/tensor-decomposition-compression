@@ -18,7 +18,7 @@ The project is designed to answer a practical research question: **which transfo
 
 ## What the project provides
 
-- A single Python API and `tn-compress` CLI for inspection, compression, training, fine-tuning, evaluation, export, and benchmarking.
+- A single Python API and `tn-compress` CLI for inspection, damage-aware analysis, compression, training, fine-tuning, evaluation, export, and benchmarking.
 - Explicit capability checks for model Ã— method Ã— task Ã— backend combinations.
 - One lifecycle for vision and language models, with task-specific evaluators.
 - Portable checkpoint bundles that preserve the exact resolved transformation.
@@ -152,11 +152,14 @@ pip install -e ".[deployment]"  # ONNX Runtime and deployment measurements
 Run an offline synthetic lifecycle:
 
 ```bash
-tn-compress train --config examples/configs/segmentation-synthetic.yaml --output-dir runs/demo/train --device cpu
-tn-compress inspect --config examples/configs/segmentation-synthetic.yaml --checkpoint runs/demo/train/bundle --output-dir runs/demo/inspect --device cpu
-tn-compress compress --config examples/configs/segmentation-synthetic.yaml --checkpoint runs/demo/train/bundle --output-dir runs/demo/compressed --device cpu
-tn-compress evaluate --checkpoint runs/demo/compressed/bundle --config examples/configs/segmentation-synthetic.yaml --output-dir runs/demo/evaluate --role validation --device cpu
+tn-compress analyze --config examples/configs/analyzer-smoke.yaml --output-dir runs/demo/analysis --level validated --device cpu
+tn-compress compress --config examples/configs/analyzer-smoke.yaml --plan runs/demo/analysis/compression_plan.json --output-dir runs/demo/compressed --device cpu
+tn-compress evaluate --checkpoint runs/demo/compressed/bundle --config examples/configs/analyzer-smoke.yaml --output-dir runs/demo/evaluate --role test --device cpu
 ```
+
+See [the damage-aware analyzer design](docs/design/damage-aware-analyzer.md) for
+the evidence levels, configuration schema, plan format, offline asset preparation
+and the resumable experiment runner.
 
 For a user-supplied model, provide a loader specification and task contract in YAML, then run `inspect` before selecting a method. The inspector reports supported and protected modules, tensor shapes, parameter counts, and reasons a transformation is unavailable.
 
