@@ -173,6 +173,7 @@ def pareto_candidates(candidates: Iterable[CandidateResult]) -> list[CandidateRe
     grouped = defaultdict(list)
     for candidate in candidates:
         if (candidate.structurally_eligible and candidate.normalized_local_error is not None
+                and candidate.allocation_eligible
                 and candidate.estimated_bytes_saved is not None and candidate.estimated_bytes_saved > 0
                 and candidate.backend_support.get("supported")):
             grouped[candidate.layer_path].append(candidate)
@@ -257,10 +258,13 @@ def _validate_frontier(model, frontier, validation_batches, adapter, baseline, c
     selected = []
     limit = int(options.get("max_validated_per_layer", 3))
     for rows in per_layer.values():
-        rows.sort(key=lambda row: (row.normalized_local_error, -row.estimated_bytes_saved,
-                                  row.method, row.candidate_id))
-        selected.extend(rows[:limit])
-        for row in rows[limit:]:
+        allocatable = [row for row in rows if row.allocation_eligible]
+        diagnostics = [row for row in rows if not row.allocation_eligible]
+        allocatable.sort(key=lambda row: (row.normalized_local_error, -row.estimated_bytes_saved,
+                                         row.method, row.candidate_id))
+        diagnostics.sort(key=lambda row: (row.method, row.candidate_id))
+        selected.extend([*allocatable[:limit], *diagnostics])
+        for row in allocatable[limit:]:
             row.decision, row.decision_reason = "rejected", "validation_shortlist_limit"
     for candidate in selected:
         samples = cache[(candidate.layer_path, "module_inputs")]
@@ -290,6 +294,7 @@ def _select_candidates(model, candidates, validation_batches, adapter, baseline,
         raise ValueError("Use a positive target size and nonnegative maximum quality loss.")
     viable = [candidate for candidate in candidates
               if candidate.status == "validated" and candidate.quality_loss is not None
+              and candidate.allocation_eligible
               and math.isfinite(candidate.quality_loss) and candidate.estimated_bytes_saved > 0]
     viable.sort(key=lambda row: (
         row.quality_loss / row.estimated_bytes_saved,
@@ -453,7 +458,10 @@ def analyze_model(model: nn.Module, config: Mapping[str, Any], *, level="structu
         raise ValueError("Validation data is empty.")
     baseline = adapter.evaluate(model, validation_batches)
     report.baseline_metrics = baseline
-    shortlisted = _validate_frontier(model, frontier, validation_batches, adapter, baseline, cache, analysis)
+    diagnostics = [candidate for candidate in candidates
+                   if not candidate.allocation_eligible and candidate.status == "calibrated"]
+    shortlisted = _validate_frontier(
+        model, [*frontier, *diagnostics], validation_batches, adapter, baseline, cache, analysis)
     accepted, cumulative, final_bytes = _select_candidates(
         model, shortlisted, validation_batches, adapter, baseline, cache,
         target_size_bytes, max_quality_loss)

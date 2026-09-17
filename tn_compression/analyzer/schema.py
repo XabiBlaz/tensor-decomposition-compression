@@ -42,6 +42,7 @@ class CandidateResult:
     original_parameters: int
     candidate_parameters: Optional[int]
     estimated_artifact_bytes: Optional[int]
+    allocation_eligible: bool = True
     candidate_id: str = ""
     rejection_reason: Optional[str] = None
     protected: bool = False

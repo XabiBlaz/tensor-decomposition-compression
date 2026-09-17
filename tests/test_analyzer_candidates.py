@@ -52,8 +52,9 @@ def test_candidate_generation_is_bounded_legal_and_non_mutating():
     assert unsupported.rejection_reason == "grouped_conv_not_supported"
     quantized = next(item for item in candidates if item.method == "round_to_nearest")
     assert quantized.structurally_eligible
+    assert not quantized.allocation_eligible
     assert quantized.estimated_bytes_saved == 0
-    assert quantized.decision == "rejected"
+    assert quantized.decision == "pending"
     for name, value in model.state_dict().items():
         torch.testing.assert_close(value, state[name])
 

@@ -205,6 +205,7 @@ def backend_capability(method: str, backend: str) -> Dict[str, Any]:
 def _candidate(model_hash: str, path: str, module: nn.Module, method: str,
                configuration: Dict[str, Any], candidate_parameters: Optional[int],
                requested_backend: str, *, eligible: bool = True, protected: bool = False,
+               allocation_eligible: bool = True,
                reason: Optional[str] = None, original_parameters: Optional[int] = None,
                original_bytes: Optional[int] = None) -> CandidateResult:
     original_parameters = original_parameters if original_parameters is not None else sum(
@@ -220,6 +221,7 @@ def _candidate(model_hash: str, path: str, module: nn.Module, method: str,
         method=method,
         configuration=configuration,
         structurally_eligible=eligible,
+        allocation_eligible=allocation_eligible,
         rejection_reason=reason,
         protected=protected,
         original_parameters=original_parameters,
@@ -234,7 +236,8 @@ def _candidate(model_hash: str, path: str, module: nn.Module, method: str,
         result.decision, result.decision_reason = "rejected", reason
     elif not backend["supported"]:
         result.decision, result.decision_reason = "rejected", backend["reason"]
-    elif result.estimated_bytes_saved is not None and result.estimated_bytes_saved <= 0:
+    elif (result.allocation_eligible and result.estimated_bytes_saved is not None
+          and result.estimated_bytes_saved <= 0):
         result.decision, result.decision_reason = "rejected", "non_beneficial_parameter_count"
     return result
 
@@ -298,9 +301,7 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
                         value = _candidate(model_hash, path, module, "round_to_nearest",
                                            {"bits": int(bits), "group_size": int(group_size)},
                                            sum(parameter.numel() for parameter in module.parameters(recurse=False)),
-                                           requested_backend)
-                        value.decision = "rejected"
-                        value.decision_reason = "reference_quantization_is_dense_and_has_no_storage_saving"
+                                           requested_backend, allocation_eligible=False)
                         method_candidates.append(value)
                         quantized += 1
                     if quantized >= method_limit:

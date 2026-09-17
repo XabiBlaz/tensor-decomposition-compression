@@ -56,12 +56,15 @@ round-to-nearest quantization reference.
 
 `max_candidates_per_layer` is a hard total across all methods for one layer.
 `max_candidates_per_method` bounds each method's grid before deterministic
-per-layer truncation. Method order and configured candidate order are preserved.
+round-robin selection. Configured method order and candidate order within each
+method are preserved. Rejected capability evidence is reported separately and
+does not consume the usable candidate budget.
 
 Candidates that increase parameter count are retained as rejected evidence.
-Round-to-nearest quantization remains a floating-point module, so it is reported
-with zero real byte saving and cannot satisfy a storage target. The analyzer
-does not infer packed INT4 storage from its nominal bit width.
+Round-to-nearest quantization remains a floating-point module. It is calibrated
+and validated as diagnostic evidence, but `allocation_eligible` is false, its
+storage saving is zero and it cannot satisfy a storage target. The analyzer
+does not infer packed INT4/INT8 storage or optimized kernels from nominal bits.
 
 ### Calibrated
 
@@ -86,7 +89,8 @@ state. The supplied model is not replaced or mutated.
 
 ### Validated
 
-Only the within-layer Pareto frontier reaches full-model validation. A candidate
+The within-layer allocation Pareto frontier and explicit diagnostic baselines
+reach full-model validation. An allocation candidate
 is dominated when another proposal for the same layer saves at least as many
 bytes and has no larger normalized local error, with one strict improvement.
 `max_validated_per_layer` bounds expensive interventions further.

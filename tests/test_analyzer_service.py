@@ -87,6 +87,27 @@ def test_validated_analysis_rolls_back_rejected_cumulative_change():
     assert model.head is original
 
 
+def test_dense_reference_quantization_is_validated_but_never_allocated():
+    workflow = config()
+    workflow["analysis"]["candidate_grid"]["linear"]["methods"] = []
+    workflow["analysis"]["candidate_grid"]["quantization"] = {
+        "enabled": True, "bits": [4], "group_sizes": [4]}
+    model = TinyClassifier()
+    report = analyze_model(
+        model, workflow, level="validated", calibration_batches=batches(),
+        validation_batches=batches(), target_size_bytes=1, max_quality_loss=100.0)
+    diagnostic = next(candidate for candidate in report.candidates
+                      if candidate.method == "round_to_nearest")
+    assert diagnostic.status == "validated"
+    assert diagnostic.decision == "validated"
+    assert not diagnostic.allocation_eligible
+    assert diagnostic.estimated_bytes_saved == 0
+    assert diagnostic.normalized_local_error is not None
+    assert diagnostic.full_model_metrics is not None
+    assert report.compression_plan["status"] == "infeasible"
+    assert report.compression_plan["transformations"] == []
+
+
 def test_validated_plan_is_consumable_and_analysis_restores_model():
     model = TinyClassifier(rank_one=True)
     original = model.head
