@@ -208,12 +208,9 @@ def _unsupported(model_hash: str, path: str, module: nn.Module, reason: str,
                       eligible=False, protected=protected, reason=reason)
 
 
-def _gated_mlp_groups(model: nn.Module) -> Dict[str, nn.Module]:
-    try:
-        from ..pruning import gated_mlps
-        return gated_mlps(model)
-    except (ImportError, ValueError):
-        return {}
+def _gated_mlp_groups(model: nn.Module):
+    from ..pruning import inspect_gated_mlps
+    return inspect_gated_mlps(model)
 
 
 def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] = None,
@@ -285,8 +282,20 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
         candidates.extend(layer_candidates[:limit])
 
     section = grid.get("gated_mlp", {})
-    if section.get("methods") and (not includes or any("mlp" in pattern for pattern in includes)):
-        for path, module in _gated_mlp_groups(model).items():
+    if section.get("methods"):
+        groups, failures = _gated_mlp_groups(model)
+        for failure in failures:
+            path = failure["path"]
+            if not _matches(path, includes, excludes):
+                continue
+            module = model.get_submodule(path)
+            candidates.append(_candidate(
+                model_hash, path, module, "gated_mlp_pruning", {}, None,
+                requested_backend, eligible=False, protected=failure["protected"],
+                reason=failure["reason"],
+                original_parameters=sum(parameter.numel() for parameter in module.parameters()),
+                original_bytes=tensor_bytes(module)))
+        for path, module in groups.items():
             if not _matches(path, includes, excludes):
                 continue
             gate, up, down = module.gate_proj, module.up_proj, module.down_proj

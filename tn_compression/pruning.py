@@ -8,25 +8,53 @@ from torch import nn
 from .api import protected_module_reasons
 
 
-def gated_mlps(model):
-    """Scope surgery to known forward contracts, not arbitrary matching names."""
-    from transformers.models.llama.modeling_llama import LlamaMLP
-    from transformers.models.qwen2.modeling_qwen2 import Qwen2MLP
+def inspect_gated_mlps(model):
+    """Return verified groups and structured failures for supported architectures."""
+    try:
+        from transformers.models.llama.modeling_llama import LlamaMLP
+        from transformers.models.qwen2.modeling_qwen2 import Qwen2MLP
+    except ImportError:
+        return {}, []
     protected = protected_module_reasons(model)
-    groups = {}
+    groups, failures = {}, []
     for path, module in model.named_modules():
         if type(module) not in {LlamaMLP, Qwen2MLP}:
             continue
-        gate, up, down = module.gate_proj, module.up_proj, module.down_proj
+        gate = getattr(module, "gate_proj", None)
+        up = getattr(module, "up_proj", None)
+        down = getattr(module, "down_proj", None)
+        reason = None
         if any(type(layer) is not nn.Linear for layer in (gate, up, down)):
-            raise ValueError(f"{path}: surgery requires three ordinary dense projections.")
-        if gate.out_features != up.out_features or up.out_features != down.in_features:
-            raise ValueError(f"{path}: incompatible intermediate dimensions.")
-        if gate.in_features != up.in_features or up.in_features != down.out_features:
-            raise ValueError(f"{path}: incompatible residual dimensions.")
-        if any(f"{path}.{name}".replace(".", "/") in protected for name in ("gate_proj", "up_proj", "down_proj")):
-            raise ValueError(f"{path}: shared parameters or parent weight access require an adapter.")
-        groups[path] = module
+            reason = "surgery_requires_three_ordinary_linear_projections"
+        elif gate.out_features != up.out_features or up.out_features != down.in_features:
+            reason = "incompatible_intermediate_dimensions"
+        elif gate.in_features != up.in_features or up.in_features != down.out_features:
+            reason = "incompatible_residual_dimensions"
+        else:
+            projection_reasons = {
+                protected.get(f"{path}.{name}".replace(".", "/"))
+                for name in ("gate_proj", "up_proj", "down_proj")
+            } - {None}
+            if projection_reasons:
+                reason = "projection_requires_adapter:" + ",".join(sorted(projection_reasons))
+        if reason:
+            failures.append({
+                "path": path,
+                "module_type": type(module).__name__,
+                "reason": reason,
+                "protected": reason.startswith("projection_requires_adapter:"),
+            })
+        else:
+            groups[path] = module
+    return groups, failures
+
+
+def gated_mlps(model):
+    """Scope surgery to known forward contracts, not arbitrary matching names."""
+    groups, failures = inspect_gated_mlps(model)
+    if failures:
+        failure = failures[0]
+        raise ValueError(f"{failure['path']}: {failure['reason']}")
     if not groups:
         raise ValueError("No supported Llama/Qwen2 gated MLPs; supply a verified dependency handler.")
     return groups

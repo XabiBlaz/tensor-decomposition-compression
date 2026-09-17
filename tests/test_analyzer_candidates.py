@@ -1,8 +1,10 @@
 import copy
 
+import pytest
 import torch
 
 from tn_compression.analyzer.candidates import generate_candidates, model_fingerprint
+from tn_compression.pruning import inspect_gated_mlps
 
 
 class TinyModel(torch.nn.Module):
@@ -83,3 +85,74 @@ def test_candidate_limit_is_total_per_layer_across_methods():
     assert len(candidates) == 3
     assert [(item.method, item.configuration["rank"]) for item in candidates] == [
         ("svd", 1), ("svd", 2), ("svd", 3)]
+
+
+def test_no_supported_gated_mlp_is_an_absence_not_a_discovery_failure():
+    groups, failures = inspect_gated_mlps(TinyModel())
+    assert groups == {} and failures == []
+    candidates = generate_candidates(TinyModel(), {
+        "include": ["*"],
+        "candidate_grid": {
+            "linear": {"methods": []}, "conv2d": {"methods": []},
+            "quantization": {"enabled": False},
+            "gated_mlp": {"methods": ["gated_mlp_pruning"], "widths": [2]},
+        },
+    })
+    assert not any(item.method == "gated_mlp_pruning" for item in candidates)
+
+
+def _qwen_mlp_model():
+    pytest.importorskip("transformers")
+    from transformers import Qwen2Config
+    from transformers.models.qwen2.modeling_qwen2 import Qwen2MLP
+
+    class Holder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            config = Qwen2Config(hidden_size=8, intermediate_size=12,
+                                 num_hidden_layers=1, num_attention_heads=2,
+                                 num_key_value_heads=2, vocab_size=16)
+            self.mlp = Qwen2MLP(config)
+
+    return Holder()
+
+
+def test_supported_qwen_block_produces_pruning_candidates():
+    model = _qwen_mlp_model()
+    groups, failures = inspect_gated_mlps(model)
+    assert list(groups) == ["mlp"] and failures == []
+    candidates = generate_candidates(model, {
+        "include": ["mlp"],
+        "candidate_grid": {
+            "linear": {"methods": []}, "conv2d": {"methods": []},
+            "quantization": {"enabled": False},
+            "gated_mlp": {"methods": ["gated_mlp_pruning"], "widths": [6]},
+        },
+    })
+    assert len(candidates) == 1 and candidates[0].structurally_eligible
+
+
+def test_malformed_qwen_block_is_reported_with_reason():
+    model = _qwen_mlp_model()
+    model.mlp.down_proj = torch.nn.Linear(11, 8, bias=False)
+    groups, failures = inspect_gated_mlps(model)
+    assert groups == {}
+    assert failures[0]["reason"] == "incompatible_intermediate_dimensions"
+    candidates = generate_candidates(model, {
+        "include": ["mlp"],
+        "candidate_grid": {
+            "linear": {"methods": []}, "conv2d": {"methods": []},
+            "quantization": {"enabled": False},
+            "gated_mlp": {"methods": ["gated_mlp_pruning"], "widths": [6]},
+        },
+    })
+    assert candidates[0].rejection_reason == "incompatible_intermediate_dimensions"
+
+
+def test_shared_qwen_projection_is_reported_as_protected():
+    model = _qwen_mlp_model()
+    model.mlp.up_proj.weight = model.mlp.gate_proj.weight
+    groups, failures = inspect_gated_mlps(model)
+    assert groups == {}
+    assert "shared_parameter_requires_adapter" in failures[0]["reason"]
+    assert failures[0]["protected"]
