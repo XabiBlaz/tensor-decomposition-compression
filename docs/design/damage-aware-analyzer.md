@@ -10,8 +10,10 @@ single generic importance score to a layer.
 A candidate is one `(layer, method, resolved configuration)` proposal. Rank 128
 and rank 256 SVD replacements of the same projection are separate candidates,
 as are Tucker and CP replacements of the same convolution. Candidate IDs hash
-the model fingerprint, layer path, method and proposed configuration. Measurement
-results do not change the ID.
+the model fingerprint, layer path, method and currently serialized configuration.
+Calibration-dependent choices such as retained pruning indices are resolved
+before emission, and the ID is recomputed. Loading a record whose ID disagrees
+with its configuration fails.
 
 Each serialized record separates:
 
@@ -28,6 +30,20 @@ dtypes and tensor values. Hashing is streamed in bounded chunks. This detects a
 plan being applied to different weights, at the cost of one full pass over model
 state at analyzer startup.
 
+Calibrated and validated reports also contain an analysis-context fingerprint.
+It covers the model fingerprint, task, analyzer configuration, candidate grid,
+seed, ordered calibration identifiers, exact values and structure of the
+in-memory calibration batches, preprocessing/data configuration, tokenizer
+configuration, analyzer schema and package version. Tensor contents are hashed
+in bounded chunks. A calibration-dependent plan is rejected before model
+mutation when this fingerprint cannot be reproduced.
+
+The content hash covers only the batches supplied to the analyzer. It does not
+hash unused dataset files, tokenizer vocabulary files, external preprocessing
+code or dependency source trees. Tokenizer and preprocessing identity is
+represented by configuration; the experiment runner separately records the Git
+revision and installed package environment.
+
 ## Evidence levels
 
 ### Structural
@@ -37,6 +53,10 @@ Structural analysis does not run the model or require data. It discovers leaf
 verified gated-MLP groups. It generates bounded grids for SVD, weighted SVD,
 TT/TTPWT, partial Tucker, CP3/CP4, gated-MLP pruning and the dense
 round-to-nearest quantization reference.
+
+`max_candidates_per_layer` is a hard total across all methods for one layer.
+`max_candidates_per_method` bounds each method's grid before deterministic
+per-layer truncation. Method order and configured candidate order are preserved.
 
 Candidates that increase parameter count are retained as rejected evidence.
 Round-to-nearest quantization remains a floating-point module, so it is reported
@@ -128,8 +148,11 @@ tn-compress compress \
 ```
 
 The model fingerprint must match. Weighted SVD recollects the configured bounded
-calibration inputs when applying the plan. Pruning plans store resolved retained
-indices. Checkpoint bundles store replacement structures and transformation
+calibration inputs and verifies the full analysis-context fingerprint before any
+replacement is installed. Pruning plans store resolved retained indices and IDs
+bound to those indices. Plan application materializes every replacement before
+mutation and rolls back module, state and metadata changes if installation
+fails. Checkpoint bundles store replacement structures and transformation
 metadata.
 
 ## Relation to established methods
@@ -166,6 +189,12 @@ stdout and stderr are preserved under `logs/`. The run records the Git commit,
 configuration, Python packages, OS, CPU and available NVIDIA information.
 Existing output is never silently replaced. A changed configuration cannot
 resume an earlier run ID.
+
+Resume also requires the current Git commit to match the recorded commit.
+`--allow-code-change` permits an intentional mixed-revision resume. Every stage
+marker retains its own commit, configuration hash and exact command, while
+`environment/commits-used.txt` lists every revision. A marker with changed
+configuration or command arguments is never reused.
 
 Prepare Oxford-IIIT Pet explicitly before the vision suite, then edit the
 absolute `data.root` in `analyzer-vision.yaml`:

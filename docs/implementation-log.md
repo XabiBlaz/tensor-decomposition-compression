@@ -72,3 +72,16 @@ completed stages and keeps model/dataset downloads disabled.
 No research sweep, public-data experiment, model download, GPU job or performance
 benchmark was run for this milestone. Published quality and deployment claims
 still require the user-operated experiment suites and backend-specific validation.
+
+### Analyzer correctness and reproducibility pass
+
+Calibration-dependent plans now bind to an exact hash of supplied batch contents
+and the relevant analysis context. Candidate IDs are checked against resolved
+configurations. Plan application resolves all replacements before mutation and
+restores model state and metadata if installation fails.
+
+Candidate limits apply across methods. Gated-MLP inspection distinguishes true
+absence from invalid dimensions and protected or shared projections. An offline
+Transformers test covers analyzer pruning through bundle reload when the language
+extra is installed. Experiment resume rejects revision changes by default and
+binds stage markers to their configuration and command.
