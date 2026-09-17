@@ -16,3 +16,11 @@ compression/outputs/*
 data/
 runs/
 *.onnx
+
+# Maintainer-only development files
+/.github/workflows/tests.yml
+/tests/
+/compression-project-agent-plan.md
+/docs/implementation-log.md
+/docs/source-inventory.json
+/docs/validation/
