@@ -1,0 +1,40 @@
+seed: 0
+task: segmentation
+num_classes: 3
+model:
+  source: smp
+  name: Unet
+  weights: null
+  kwargs:
+    encoder_name: resnet34
+    classes: 3
+data:
+  kind: oxford_pet
+  root: /path/to/oxford-iiit-pet
+  download: false
+  size: 256
+  batch_size: 4
+analysis:
+  level: validated
+  backend: pytorch
+  target_size_mb: 60
+  max_quality_loss: 0.05
+  include: [encoder.layer1.*.conv*, encoder.layer2.*.conv*]
+  max_samples: 16
+  max_spatial_size: 32
+  max_validated_per_layer: 2
+  candidate_grid:
+    linear:
+      methods: []
+    conv2d:
+      methods: [partial_tucker, tensor_train, cp3, cp4]
+      rank_ratios: [0.25, 0.5]
+    quantization:
+      enabled: false
+    gated_mlp:
+      methods: []
+benchmark:
+  input_shape: [1, 3, 256, 256]
+  warmup: 5
+  iterations: 30
+  threads: 2

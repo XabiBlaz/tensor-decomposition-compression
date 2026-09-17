@@ -1,0 +1,48 @@
+seed: 0
+task: causal_lm
+model:
+  source: transformers
+  name: Qwen/Qwen2.5-0.5B
+  revision: 060db6499f32faf8b98477b0a26969ef7d8b9987
+  weights: pretrained
+tokenizer:
+  name: Qwen/Qwen2.5-0.5B
+  revision: 060db6499f32faf8b98477b0a26969ef7d8b9987
+data:
+  kind: huggingface
+  name: Salesforce/wikitext
+  revision: b08601e04326c79dfdd32d625aee71d232d685c3
+  subset: wikitext-2-raw-v1
+  splits:
+    calibration: train
+    validation: validation
+    test: test
+  samples: 8
+  max_length: 128
+  batch_size: 1
+analysis:
+  level: validated
+  backend: pytorch
+  target_size_mb: 1800
+  max_quality_loss: 0.1
+  include:
+    - model.layers.0.mlp.up_proj
+    - model.layers.0.mlp.down_proj
+  max_samples: 128
+  max_validated_per_layer: 2
+  candidate_grid:
+    linear:
+      methods: [svd, weighted_svd]
+      ranks: [128, 256, 384]
+    conv2d:
+      methods: []
+    quantization:
+      enabled: false
+    gated_mlp:
+      methods: []
+benchmark:
+  input_shape: [1, 64]
+  output_tokens: 16
+  warmup: 1
+  iterations: 3
+  threads: 2
