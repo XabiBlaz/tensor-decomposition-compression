@@ -157,6 +157,7 @@ def materialize_candidate(model: nn.Module, candidate: CandidateResult, samples=
         elif candidate.method == "gated_mlp_pruning":
             result, indices = _pruned_mlp_candidate(layer, configuration, pruning_activations)
             candidate.configuration["retained_indices"] = indices
+            candidate.refresh_candidate_id()
         else:
             policy = {"type": candidate.method, **configuration}
             result = compress_layer(layer, policy)
@@ -505,6 +506,9 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
                 transformation["layer_path"]).parameters()),
             candidate_parameters=None, estimated_artifact_bytes=None,
         )
+        if candidate.candidate_id != transformation.get("candidate_id"):
+            raise ValueError(
+                f"Plan candidate ID does not match resolved configuration for {candidate.layer_path}.")
         samples = pruning = None
         if candidate.method == "weighted_svd":
             samples = collect_module_inputs(

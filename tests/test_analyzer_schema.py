@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from tn_compression.analyzer.schema import AnalysisReport, CandidateResult, capability
 
 
@@ -40,3 +42,17 @@ def test_analysis_schema_round_trips_through_json():
     )
     restored = AnalysisReport.from_dict(json.loads(json.dumps(report.to_dict())))
     assert restored == report
+
+
+def test_candidate_identifier_tracks_resolved_configuration():
+    value = candidate({"width": 4, "selection": "activation"})
+    proposal_id = value.candidate_id
+    value.configuration["retained_indices"] = [0, 2, 4, 5]
+    resolved_id = value.refresh_candidate_id()
+    assert resolved_id != proposal_id
+    assert value.refresh_candidate_id() == resolved_id
+    serialized = value.to_dict()
+    assert CandidateResult.from_dict(serialized).candidate_id == resolved_id
+    serialized["configuration"]["retained_indices"] = [0, 1, 2, 3]
+    with pytest.raises(ValueError, match="does not match"):
+        CandidateResult.from_dict(serialized)

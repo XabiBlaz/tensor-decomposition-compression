@@ -17,7 +17,7 @@ def _canonical_json(value: Any) -> str:
 
 def stable_candidate_id(model_fingerprint: str, layer_path: str, method: str,
                         configuration: Mapping[str, Any]) -> str:
-    """Identify a proposed transformation independently of measured evidence."""
+    """Identify a transformation configuration independently of measured evidence."""
     payload = {
         "model_fingerprint": model_fingerprint,
         "layer_path": layer_path,
@@ -62,9 +62,17 @@ class CandidateResult:
     decision_reason: Optional[str] = None
 
     def __post_init__(self):
-        if not self.candidate_id:
-            self.candidate_id = stable_candidate_id(
-                self.model_fingerprint, self.layer_path, self.method, self.configuration)
+        expected = stable_candidate_id(
+            self.model_fingerprint, self.layer_path, self.method, self.configuration)
+        if self.candidate_id and self.candidate_id != expected:
+            raise ValueError("Candidate ID does not match its serialized configuration.")
+        self.candidate_id = expected
+
+    def refresh_candidate_id(self) -> str:
+        """Rebind identity after resolving calibration-dependent configuration."""
+        self.candidate_id = stable_candidate_id(
+            self.model_fingerprint, self.layer_path, self.method, self.configuration)
+        return self.candidate_id
 
     @property
     def estimated_bytes_saved(self) -> Optional[int]:
