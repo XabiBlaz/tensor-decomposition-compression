@@ -18,6 +18,8 @@ def test_analysis_context_is_stable_and_binds_content_identifiers_and_preprocess
     repeated = analysis_context("model", copy.deepcopy(config), calibration_batches=batches,
                                 calibration_ids=["sample-0", "sample-1"])
     assert repeated == first
+    assert first["evidence"]["candidate_grid"]["linear"]["methods"] == ["svd", "weighted_svd"]
+    assert first["evidence"]["candidate_grid"]["linear"]["ranks"] == [1, 2]
 
     changed_content = [(batches[0][0].clone(), batches[0][1])]
     changed_content[0][0][0, 0] += 1

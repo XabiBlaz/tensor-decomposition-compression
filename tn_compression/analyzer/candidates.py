@@ -38,6 +38,15 @@ DEFAULT_GRID = {
 }
 
 
+def resolved_candidate_grid(analysis: Mapping[str, Any]) -> Dict[str, Any]:
+    """Merge configured grid fields over deterministic analyzer defaults."""
+    grid = {key: dict(value) for key, value in DEFAULT_GRID.items()}
+    for key, value in analysis.get("candidate_grid", {}).items():
+        if isinstance(value, Mapping):
+            grid.setdefault(key, {}).update(value)
+    return grid
+
+
 def model_fingerprint(model: nn.Module, identity: Optional[Mapping[str, Any]] = None,
                       *, chunk_elements: int = 1_048_576) -> str:
     """Hash model identity and tensor values with bounded temporary storage."""
@@ -218,10 +227,7 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
                         fingerprint: Optional[str] = None) -> list[CandidateResult]:
     """Generate bounded legal candidates without changing or executing the model."""
     analysis = dict(analysis or {})
-    grid = {key: dict(value) for key, value in DEFAULT_GRID.items()}
-    for key, value in analysis.get("candidate_grid", {}).items():
-        if isinstance(value, Mapping):
-            grid.setdefault(key, {}).update(value)
+    grid = resolved_candidate_grid(analysis)
     limit = int(analysis.get("max_candidates_per_layer", 12))
     method_limit = int(analysis.get("max_candidates_per_method", limit))
     if limit < 1 or method_limit < 1:

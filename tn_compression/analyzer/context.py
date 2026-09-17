@@ -10,6 +10,7 @@ from typing import Any, Mapping, Optional, Sequence
 import torch
 
 from .schema import SCHEMA_VERSION
+from .candidates import resolved_candidate_grid
 
 
 def _canonical_json(value: Any) -> str:
@@ -69,7 +70,7 @@ def analysis_context(model_fingerprint: str, config: Mapping[str, Any], *,
         "preprocessing": config.get("preprocessing", config.get("data", {})),
         "tokenizer": config.get("tokenizer"),
         "seed": seed,
-        "candidate_grid": analysis.get("candidate_grid", {}),
+        "candidate_grid": resolved_candidate_grid(analysis),
         "analyzer_schema_version": SCHEMA_VERSION,
         "package_version": package_version,
     }
