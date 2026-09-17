@@ -4,7 +4,8 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from tn_compression.analyzer.schema import CandidateResult
+from tn_compression.analyzer.candidates import model_fingerprint
+from tn_compression.analyzer.schema import CandidateResult, stable_candidate_id
 from tn_compression.analyzer.service import (
     _pruned_mlp_candidate,
     analyze_model,
@@ -220,3 +221,47 @@ def test_pruned_mlp_marks_reconstructible_projections_not_custom_parent():
     assert not getattr(candidate, "_tn_replacement", False)
     assert all(getattr(getattr(candidate, name), "_tn_replacement", False)
                for name in ("gate_proj", "up_proj", "down_proj"))
+
+
+def test_plan_application_materializes_every_replacement_before_mutation():
+    class TwoLayers(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.first = torch.nn.Linear(4, 4)
+            self.second = torch.nn.Linear(4, 4)
+            self.config = SimpleNamespace(label="original")
+
+        def forward(self, inputs):
+            return self.second(self.first(inputs))
+
+    workflow = {"task": "classification", "model": {"name": "two-layers"}, "analysis": {}}
+    model = TwoLayers().train()
+    model._tn_transformations = [{"method": "existing"}]
+    model._tn_model_spec = {"source": "custom", "marker": [1, 2]}
+    originals = (model.first, model.second)
+    state = copy.deepcopy(model.state_dict())
+    inputs = torch.randn(3, 4)
+    expected = model(inputs).detach().clone()
+    fingerprint = model_fingerprint(model, workflow["model"])
+
+    def transformation(path, rank):
+        configuration = {"rank": rank}
+        return {
+            "candidate_id": stable_candidate_id(fingerprint, path, "svd", configuration),
+            "layer_path": path, "method": "svd", "configuration": configuration,
+        }
+
+    plan = {
+        "schema_version": 1, "kind": "damage_aware_compression_plan",
+        "model_fingerprint": fingerprint,
+        "transformations": [transformation("first", 1), transformation("second", 0)],
+    }
+    with pytest.raises(ValueError, match="positive integer"):
+        apply_compression_plan(model, plan, workflow)
+    assert (model.first, model.second) == originals
+    assert model.training and model.config.label == "original"
+    assert model._tn_transformations == [{"method": "existing"}]
+    assert model._tn_model_spec == {"source": "custom", "marker": [1, 2]}
+    for name, value in state.items():
+        torch.testing.assert_close(model.state_dict()[name], value)
+    torch.testing.assert_close(model(inputs), expected)

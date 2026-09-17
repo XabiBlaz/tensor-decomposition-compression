@@ -470,7 +470,7 @@ def analyze_model(model: nn.Module, config: Mapping[str, Any], *, level="structu
 
 def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Mapping[str, Any],
                            *, calibration_batches=None, calibration_ids=None, device="cpu") -> Dict[str, Any]:
-    """Apply a resolved analyzer plan; weighted SVD recollects bounded inputs."""
+    """Atomically apply a resolved plan; weighted SVD verifies calibration context."""
     if plan.get("kind") != "damage_aware_compression_plan" or plan.get("schema_version") != 1:
         raise ValueError("Unsupported analyzer compression plan.")
     fingerprint = model_fingerprint(model, config.get("analysis", {}).get("model_identity", config.get("model", {})))
@@ -495,15 +495,23 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
                 "tokenizer, seed or analyzer configuration changed.")
     adapter = TaskAdapter(config.get("task", "classification"), config, device=device)
     options = {"seed": config.get("seed", 0), **config.get("analysis", {})}
-    applied = []
+    paths = [item.get("layer_path", "") for item in transformations]
+    if any(not path for path in paths) or len(paths) != len(set(paths)):
+        raise ValueError("Compression plan contains missing or duplicate layer paths.")
+    if any(left.startswith(right + ".") or right.startswith(left + ".")
+           for index, left in enumerate(paths) for right in paths[index + 1:]):
+        raise ValueError("Compression plan contains overlapping transformations.")
+
+    # Resolve every path, identity and replacement before changing the model.
+    resolved = []
     for transformation in transformations:
+        original = model.get_submodule(transformation["layer_path"])
         candidate = CandidateResult(
             model_fingerprint=fingerprint, layer_path=transformation["layer_path"],
-            module_type=type(model.get_submodule(transformation["layer_path"])).__name__,
+            module_type=type(original).__name__,
             method=transformation["method"], configuration=copy.deepcopy(transformation["configuration"]),
             structurally_eligible=True,
-            original_parameters=sum(parameter.numel() for parameter in model.get_submodule(
-                transformation["layer_path"]).parameters()),
+            original_parameters=sum(parameter.numel() for parameter in original.parameters()),
             candidate_parameters=None, estimated_artifact_bytes=None,
         )
         if candidate.candidate_id != transformation.get("candidate_id"):
@@ -516,8 +524,43 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
                 max_samples=options.get("max_samples", options.get("max_rows", 256)),
                 seed=options.get("seed", 0), input_mask=adapter.input_mask, sample_mode="rows")
         replacement = materialize_candidate(model, candidate, samples, pruning)
-        set_submodule_by_path(model, candidate.layer_path, replacement)
-        applied.append(transformation)
-    model._tn_transformations = [*getattr(model, "_tn_transformations", []), *copy.deepcopy(applied)]
+        resolved.append((candidate.layer_path, original, replacement))
+
+    state = {name: value.detach().clone() for name, value in model.state_dict().items()}
+    buffers = [(buffer, buffer.detach().clone()) for buffer in model.buffers()]
+    modes = [(module, module.training) for module in model.modules()]
+    metadata = {
+        name: (hasattr(model, name), copy.deepcopy(getattr(model, name, None)))
+        for name in ("_tn_transformations", "_tn_model_spec")
+    }
+    config_object = getattr(model, "config", None)
+    config_state = copy.deepcopy(getattr(config_object, "__dict__", None))
+    applied = []
+    try:
+        for path, _, replacement in resolved:
+            set_submodule_by_path(model, path, replacement)
+            applied.append(next(item for item in transformations if item["layer_path"] == path))
+        model._tn_transformations = [
+            *getattr(model, "_tn_transformations", []), *copy.deepcopy(applied)]
+    except Exception:
+        for path, original, _ in reversed(resolved):
+            set_submodule_by_path(model, path, original)
+        model.load_state_dict(state, strict=True)
+        with torch.no_grad():
+            for buffer, value in buffers:
+                buffer.copy_(value)
+        for module, training in modes:
+            module.training = training
+        for name, (existed, value) in metadata.items():
+            if existed:
+                setattr(model, name, value)
+            elif hasattr(model, name):
+                delattr(model, name)
+        if config_object is not None:
+            model.config = config_object
+            if config_state is not None:
+                config_object.__dict__.clear()
+                config_object.__dict__.update(config_state)
+        raise
     return {"applied": len(applied), "transformations": applied,
             "model_tensor_bytes": tensor_bytes(model), "plan_model_fingerprint": fingerprint}
