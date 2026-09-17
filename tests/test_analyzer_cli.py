@@ -34,7 +34,9 @@ def test_structural_analyze_cli_writes_public_artifacts(tmp_path):
     analysis = json.loads((output / "analysis.json").read_text())
     plan = json.loads((output / "compression_plan.json").read_text())
     assert analysis["level"] == "structural"
+    assert analysis["analysis_context_fingerprint"]
     assert analysis["candidates"][0]["layer_path"] == "fc"
     assert plan["kind"] == "damage_aware_compression_plan"
+    assert plan["analysis_context_fingerprint"] == analysis["analysis_context_fingerprint"]
     assert (output / "analysis-summary.txt").exists()
     assert (output / "analysis-report.html").exists()
