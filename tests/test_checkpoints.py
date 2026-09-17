@@ -3,6 +3,7 @@ import torch
 from torch import nn
 
 from tn_compression.api import apply_compression_plan, build_plan
+from tn_compression.analyzer.service import analyze_model, apply_compression_plan as apply_analyzer_plan
 from tn_compression.checkpoints import load_bundle, save_bundle
 from tn_compression.models import load_model
 
@@ -71,3 +72,54 @@ def test_transformer_bundle_preserves_attention_backend_and_rotary_buffers(tmp_p
     with torch.no_grad():
         torch.testing.assert_close(model(tokens).logits, restored(tokens).logits, rtol=0, atol=0)
 
+
+def test_analyzer_pruning_plan_round_trips_resolved_structure(tmp_path):
+    pytest.importorskip("transformers")
+    spec = {"source": "transformers", "config": {
+        "model_type": "qwen2", "hidden_size": 8, "intermediate_size": 16,
+        "num_hidden_layers": 1, "num_attention_heads": 2,
+        "num_key_value_heads": 2, "vocab_size": 16}}
+    workflow = {
+        "seed": 4, "task": "causal_lm", "model": spec,
+        "analysis": {
+            "include": ["model.layers.0.mlp"], "max_samples": 8,
+            "candidate_grid": {
+                "linear": {"methods": []}, "conv2d": {"methods": []},
+                "quantization": {"enabled": False},
+                "gated_mlp": {
+                    "methods": ["gated_mlp_pruning"], "widths": [8],
+                    "selection": "activation",
+                },
+            },
+        },
+    }
+    model = load_model(spec).eval()
+    batches = [{"input_ids": torch.tensor([[1, 2, 3, 4]]),
+                "attention_mask": torch.ones(1, 4, dtype=torch.long)}]
+    report = analyze_model(
+        model, workflow, level="validated", calibration_batches=batches,
+        calibration_ids=["tiny-language-0"], validation_batches=batches,
+        target_size_bytes=1, max_quality_loss=100)
+    transformation = report.compression_plan["transformations"][0]
+    retained = transformation["configuration"]["retained_indices"]
+    assert len(retained) == 8
+    apply_analyzer_plan(
+        model, report.compression_plan, workflow,
+        calibration_batches=batches, calibration_ids=["tiny-language-0"])
+    mlp = model.model.layers[0].mlp
+    shapes = tuple(tuple(layer.weight.shape) for layer in
+                   (mlp.gate_proj, mlp.up_proj, mlp.down_proj))
+    tokens = batches[0]["input_ids"]
+    with torch.no_grad():
+        expected = model(tokens, use_cache=False).logits
+    save_bundle(model, tmp_path / "pruned-bundle")
+    restored, manifest = load_bundle(tmp_path / "pruned-bundle")
+    restored_mlp = restored.model.layers[0].mlp
+    restored_shapes = tuple(tuple(layer.weight.shape) for layer in
+                            (restored_mlp.gate_proj, restored_mlp.up_proj, restored_mlp.down_proj))
+    assert restored_shapes == shapes
+    assert manifest["transformations"] == model._tn_transformations
+    assert manifest["transformations"][-1]["configuration"]["retained_indices"] == retained
+    with torch.no_grad():
+        torch.testing.assert_close(
+            restored(tokens, use_cache=False).logits, expected, rtol=0, atol=0)
