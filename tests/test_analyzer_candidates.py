@@ -44,8 +44,10 @@ def test_candidate_generation_is_bounded_legal_and_non_mutating():
     assert {item.method for item in candidates if item.layer_path == "conv"} == {"partial_tucker", "cp3"}
     assert all(item.configuration["rank"] <= 3 for item in candidates
                if item.layer_path == "head" and item.method in {"svd", "weighted_svd"})
-    assert len([item for item in candidates if item.layer_path == "conv"]) <= 5
-    assert len([item for item in candidates if item.layer_path == "head"]) <= 5
+    assert len([item for item in candidates if item.layer_path == "conv"
+                and item.decision != "rejected"]) <= 5
+    assert len([item for item in candidates if item.layer_path == "head"
+                and item.decision != "rejected"]) <= 5
     unsupported = next(item for item in candidates if item.layer_path == "depthwise")
     assert unsupported.rejection_reason == "grouped_conv_not_supported"
     quantized = next(item for item in candidates if item.method == "round_to_nearest")
@@ -72,19 +74,28 @@ def test_backend_support_is_separate_from_method_eligibility():
 
 
 def test_candidate_limit_is_total_per_layer_across_methods():
-    candidates = generate_candidates(TinyModel(), {
-        "include": ["head"],
-        "max_candidates_per_layer": 3,
-        "max_candidates_per_method": 4,
+    options = {
+        "include": ["conv"],
+        "max_candidates_per_layer": 5,
+        "max_candidates_per_method": 2,
         "candidate_grid": {
-            "linear": {"methods": ["svd", "weighted_svd"], "ranks": [1, 2, 3]},
-            "quantization": {"enabled": True, "bits": [4, 8], "group_sizes": [2, 4]},
+            "conv2d": {"methods": ["partial_tucker", "cp3", "cp4"],
+                       "rank_ratios": [0.25, 0.5, 0.75]},
+            "quantization": {"enabled": False},
             "gated_mlp": {"methods": []},
         },
-    })
-    assert len(candidates) == 3
-    assert [(item.method, item.configuration["rank"]) for item in candidates] == [
-        ("svd", 1), ("svd", 2), ("svd", 3)]
+    }
+    candidates = generate_candidates(TinyModel(), options)
+    repeated = generate_candidates(TinyModel(), options, fingerprint=candidates[0].model_fingerprint)
+    assert len(candidates) == 5
+    assert [item.method for item in candidates] == [
+        "partial_tucker", "cp3", "cp4", "partial_tucker", "cp3"]
+    assert {item.method for item in candidates[:3]} == {
+        "partial_tucker", "cp3", "cp4"}
+    assert all(sum(item.method == method for item in candidates) <= 2
+               for method in {item.method for item in candidates})
+    assert [(item.method, item.configuration, item.candidate_id) for item in repeated] == [
+        (item.method, item.configuration, item.candidate_id) for item in candidates]
 
 
 def test_no_supported_gated_mlp_is_an_absence_not_a_discovery_failure():

@@ -103,6 +103,34 @@ def _bounded_unique(values: Iterable[Any], limit: int) -> list[Any]:
     return [list(value) if isinstance(value, tuple) else value for value in result]
 
 
+def _round_robin(queues: Sequence[Sequence[CandidateResult]], limit: int) -> list[CandidateResult]:
+    """Select fairly across methods while preserving order within each method."""
+    positions = [0] * len(queues)
+    selected = []
+    while len(selected) < limit:
+        advanced = False
+        for index, queue in enumerate(queues):
+            if positions[index] >= len(queue):
+                continue
+            selected.append(queue[positions[index]])
+            positions[index] += 1
+            advanced = True
+            if len(selected) == limit:
+                break
+        if not advanced:
+            break
+    return selected
+
+
+def _schedule_candidates(queues: Sequence[Sequence[CandidateResult]], limit: int) -> list[CandidateResult]:
+    """Bound usable trials without hiding deterministic rejection evidence."""
+    eligible = [[candidate for candidate in queue if candidate.decision != "rejected"]
+                for queue in queues]
+    rejected = [candidate for queue in queues for candidate in queue
+                if candidate.decision == "rejected"]
+    return [*_round_robin(eligible, limit), *rejected]
+
+
 def _linear_ranks(layer: nn.Linear, options: Mapping[str, Any], limit: int) -> list[int]:
     maximum = min(layer.in_features, layer.out_features)
     explicit = options.get("ranks", [])
@@ -248,17 +276,20 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
             candidates.append(_unsupported(model_hash, path, module, protected_reason or layer_reason,
                                            requested_backend, protected=bool(protected_reason)))
             continue
-        layer_candidates = []
+        method_queues = []
         if type(module) is nn.Linear:
             section = grid["linear"]
             for method in section.get("methods", []):
                 options = _method_options(section, method)
+                method_candidates = []
                 for rank in _linear_ranks(module, options, method_limit):
-                    layer_candidates.append(_candidate(
+                    method_candidates.append(_candidate(
                         model_hash, path, module, method, {"rank": rank},
                         _linear_parameters(module, rank), requested_backend))
+                method_queues.append(method_candidates)
             quantization = grid.get("quantization", {})
             if quantization.get("enabled", True):
+                method_candidates = []
                 quantized = 0
                 for bits in quantization.get("bits", []):
                     for group_size in quantization.get("group_sizes", []):
@@ -270,22 +301,25 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
                                            requested_backend)
                         value.decision = "rejected"
                         value.decision_reason = "reference_quantization_is_dense_and_has_no_storage_saving"
-                        layer_candidates.append(value)
+                        method_candidates.append(value)
                         quantized += 1
                     if quantized >= method_limit:
                         break
+                method_queues.append(method_candidates)
         elif type(module) is nn.Conv2d:
             section = grid["conv2d"]
             for method in section.get("methods", []):
                 options = _method_options(section, method)
+                method_candidates = []
                 for rank in _conv_ranks(module, method, options, method_limit):
                     config = {"rank": rank}
                     if method == "tensor_train":
                         config["structure"] = "TTPWT"
-                    layer_candidates.append(_candidate(
+                    method_candidates.append(_candidate(
                         model_hash, path, module, method, config,
                         _conv_parameters(module, method, rank), requested_backend))
-        candidates.extend(layer_candidates[:limit])
+                method_queues.append(method_candidates)
+        candidates.extend(_schedule_candidates(method_queues, limit))
 
     section = grid.get("gated_mlp", {})
     if section.get("methods"):
@@ -323,5 +357,5 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
                     {"width": width, "selection": section.get("selection", "activation")},
                     parameters, requested_backend, original_parameters=original_parameters,
                     original_bytes=original_bytes))
-            candidates.extend(layer_candidates[:limit])
+            candidates.extend(_schedule_candidates([layer_candidates], limit))
     return candidates
