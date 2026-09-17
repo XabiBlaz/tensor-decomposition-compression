@@ -19,6 +19,7 @@ Options:
   --vision-config PATH  Vision workflow YAML
   --language-config PATH Language workflow YAML
   --with-recovery       Run finetune after compression (config must support it)
+  --allow-code-change   Resume across commits while retaining per-stage revisions
   --dry-run             Print commands without creating files or running work
   --help                Show this help
 
@@ -39,6 +40,7 @@ SMOKE_CONFIG=examples/configs/analyzer-smoke.yaml
 VISION_CONFIG=examples/configs/analyzer-vision.yaml
 LANGUAGE_CONFIG=examples/configs/analyzer-language.yaml
 WITH_RECOVERY=0
+ALLOW_CODE_CHANGE=0
 DRY_RUN=0
 
 while (($#)); do
@@ -53,6 +55,7 @@ while (($#)); do
     --vision-config) VISION_CONFIG=${2:?missing vision config}; shift 2 ;;
     --language-config) LANGUAGE_CONFIG=${2:?missing language config}; shift 2 ;;
     --with-recovery) WITH_RECOVERY=1; shift ;;
+    --allow-code-change) ALLOW_CODE_CHANGE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -72,7 +75,9 @@ if [[ ! "$RUN_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 2
 fi
 RUN_ROOT="$OUTPUT_DIR/$RUN_ID"
+CURRENT_COMMIT=$(git rev-parse HEAD)
 CLI=(python -m tn_compression)
+ACTIVE_CONFIG_HASH=
 
 export HF_HUB_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
@@ -86,36 +91,74 @@ print_command() {
   printf '\n'
 }
 
+hash_text() {
+  sha256sum | awk '{print $1}'
+}
+
+stage_signature() {
+  local command_text
+  printf -v command_text '%q ' "$@"
+  printf '%s\0%s' "$ACTIVE_CONFIG_HASH" "$command_text" | hash_text
+}
+
 run_stage() {
   local suite_dir=$1
   local name=$2
   shift 2
   local marker="$suite_dir/.stages/$name.done"
   local log="$suite_dir/logs/$name.log"
-  if [[ "$DRY_RUN" == 1 ]]; then
-    print_command "$@"
+  local signature command_text recorded_signature recorded_commit
+  signature=$(stage_signature "$@")
+  printf -v command_text '%q ' "$@"
+  if [[ -f "$marker" ]]; then
+    recorded_signature=$(sed -n 's/^signature=//p' "$marker")
+    recorded_commit=$(sed -n 's/^git_commit=//p' "$marker")
+    if [[ -z "$recorded_signature" || "$recorded_signature" != "$signature" ]]; then
+      echo "Refusing to reuse stage $name: completion marker does not match its configuration and command." >&2
+      exit 2
+    fi
+    echo "Skipping completed stage $name (commit ${recorded_commit:-unknown})"
     return
   fi
-  if [[ -f "$marker" ]]; then
-    echo "Skipping completed stage $name"
+  if [[ "$DRY_RUN" == 1 ]]; then
+    print_command "$@"
     return
   fi
   mkdir -p "$suite_dir/.stages" "$suite_dir/logs"
   print_command "$@" | tee "$log"
   "$@" 2>&1 | tee -a "$log"
-  touch "$marker"
+  {
+    printf 'signature=%s\n' "$signature"
+    printf 'git_commit=%s\n' "$CURRENT_COMMIT"
+    printf 'config_sha256=%s\n' "$ACTIVE_CONFIG_HASH"
+    printf 'command=%s\n' "$command_text"
+  } > "$marker.tmp"
+  mv "$marker.tmp" "$marker"
 }
 
 record_environment() {
+  local recorded_file="$RUN_ROOT/environment/git-commit.txt"
+  local recorded_commit=
+  if [[ -f "$recorded_file" ]]; then
+    recorded_commit=$(cat "$recorded_file")
+    if [[ "$recorded_commit" != "$CURRENT_COMMIT" && "$ALLOW_CODE_CHANGE" != 1 ]]; then
+      echo "Refusing to resume run $RUN_ID: recorded commit $recorded_commit differs from $CURRENT_COMMIT." >&2
+      echo "Use --allow-code-change to retain per-stage revision provenance." >&2
+      exit 2
+    fi
+  fi
   if [[ "$DRY_RUN" == 1 ]]; then
     print_command git rev-parse HEAD
     print_command python -m pip freeze
     print_command nvidia-smi
+    if [[ -n "$recorded_commit" && "$recorded_commit" != "$CURRENT_COMMIT" ]]; then
+      echo "+ record mixed-revision resume: $recorded_commit -> $CURRENT_COMMIT"
+    fi
     return
   fi
   mkdir -p "$RUN_ROOT/environment"
-  if [[ ! -f "$RUN_ROOT/environment/git-commit.txt" ]]; then
-    git rev-parse HEAD > "$RUN_ROOT/environment/git-commit.txt"
+  if [[ ! -f "$recorded_file" ]]; then
+    printf '%s\n' "$CURRENT_COMMIT" > "$recorded_file"
     git status --short --branch > "$RUN_ROOT/environment/git-status.txt"
     python --version > "$RUN_ROOT/environment/python.txt" 2>&1
     python -m pip freeze > "$RUN_ROOT/environment/packages.txt"
@@ -127,6 +170,11 @@ record_environment() {
       echo "nvidia-smi unavailable" > "$RUN_ROOT/environment/nvidia-smi.txt"
     fi
   fi
+  if [[ ! -f "$RUN_ROOT/environment/commits-used.txt" ]]; then
+    printf '%s\n' "${recorded_commit:-$CURRENT_COMMIT}" > "$RUN_ROOT/environment/commits-used.txt"
+  fi
+  grep -Fxq "$CURRENT_COMMIT" "$RUN_ROOT/environment/commits-used.txt" || \
+    printf '%s\n' "$CURRENT_COMMIT" >> "$RUN_ROOT/environment/commits-used.txt"
 }
 
 run_suite() {
@@ -138,6 +186,7 @@ run_suite() {
     echo "Configuration does not exist: $config" >&2
     exit 2
   fi
+  ACTIVE_CONFIG_HASH=$(sha256sum "$config" | awk '{print $1}')
   if [[ "$DRY_RUN" == 1 ]]; then
     print_command cp "$config" "$resolved"
   else
@@ -171,8 +220,10 @@ run_suite() {
     checkpoint="$suite_dir/recovery/bundle"
   elif [[ "$DRY_RUN" == 0 ]]; then
     mkdir -p "$suite_dir/.stages"
-    echo "Recovery intentionally disabled; pass --with-recovery to enable it." \
-      > "$suite_dir/.stages/recovery.skipped"
+    {
+      echo "Recovery intentionally disabled; pass --with-recovery to enable it."
+      printf 'git_commit=%s\nconfig_sha256=%s\n' "$CURRENT_COMMIT" "$ACTIVE_CONFIG_HASH"
+    } > "$suite_dir/.stages/recovery.skipped"
   fi
 
   run_stage "$suite_dir" evaluation "${CLI[@]}" evaluate \
