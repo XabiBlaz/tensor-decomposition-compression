@@ -92,6 +92,8 @@ class AnalysisReport:
     requested_backend: str
     candidates: List[CandidateResult]
     capabilities: Dict[str, Any]
+    analysis_context_fingerprint: Optional[str] = None
+    analysis_context: Optional[Dict[str, Any]] = None
     baseline_metrics: Optional[Dict[str, Any]] = None
     cumulative_metrics: Optional[Dict[str, Any]] = None
     calibration: Optional[Dict[str, Any]] = None

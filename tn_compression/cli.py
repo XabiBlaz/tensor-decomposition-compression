@@ -153,11 +153,12 @@ def run(args):
         elif args.command == "compress" and args.plan:
             from .analyzer.service import apply_compression_plan
             plan = json.loads(Path(args.plan).read_text())
-            calibration_batches = None
+            calibration_batches = calibration_ids = None
             if any(item.get("method") == "weighted_svd" for item in plan.get("transformations", [])):
-                calibration_batches, _ = analysis_batches(config, "calibration")
+                calibration_batches, calibration_ids = analysis_batches(config, "calibration")
             result = apply_compression_plan(model, plan, config,
-                                            calibration_batches=calibration_batches, device=device)
+                                            calibration_batches=calibration_batches,
+                                            calibration_ids=calibration_ids, device=device)
             save_bundle(model, output / "bundle", metadata={"workflow": config, "analysis_plan": plan})
         elif args.command == "compress" and config.get("allocation"):
             from .allocation import allocate_ranks

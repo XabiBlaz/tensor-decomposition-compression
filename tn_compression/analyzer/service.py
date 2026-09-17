@@ -18,6 +18,7 @@ from ..pruning import select_channels, slice_linear
 from ..quantization import round_to_nearest
 from ..tasks.vision import evaluate_vision, evaluation_mode
 from .candidates import generate_candidates, model_fingerprint, serialized_state_bytes, tensor_bytes
+from .context import analysis_context
 from .schema import AnalysisReport, CandidateResult, capability
 
 
@@ -350,6 +351,8 @@ def _plan(report, original_bytes, final_bytes):
         "model_fingerprint": report.model_fingerprint,
         "task": report.task,
         "requested_backend": report.requested_backend,
+        "analysis_context_fingerprint": report.analysis_context_fingerprint,
+        "analysis_context": copy.deepcopy(report.analysis_context),
         "original_tensor_bytes": original_bytes,
         "estimated_final_tensor_bytes": final_bytes,
         "status": ("not_selected" if target_bytes is None else
@@ -412,6 +415,9 @@ def analyze_model(model: nn.Module, config: Mapping[str, Any], *, level="structu
     )
     original_bytes = tensor_bytes(model)
     if level == "structural":
+        context = analysis_context(fingerprint, config)
+        report.analysis_context_fingerprint = context["fingerprint"]
+        report.analysis_context = dict(context["evidence"])
         report.summary = _summary(candidates)
         report.compression_plan = _plan(report, original_bytes, original_bytes)
         return report
@@ -420,6 +426,11 @@ def analyze_model(model: nn.Module, config: Mapping[str, Any], *, level="structu
     calibration_batches = list(calibration_batches)
     if not calibration_batches:
         raise ValueError("Calibration data is empty.")
+    context = analysis_context(
+        fingerprint, config, calibration_batches=calibration_batches,
+        calibration_ids=calibration_ids)
+    report.analysis_context_fingerprint = context["fingerprint"]
+    report.analysis_context = dict(context["evidence"])
     adapter = TaskAdapter(report.task, config, device=device, detection_coco=detection_coco)
     cache = _score_candidates(
         model, candidates, calibration_batches, adapter, analysis,
@@ -457,7 +468,7 @@ def analyze_model(model: nn.Module, config: Mapping[str, Any], *, level="structu
 
 
 def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Mapping[str, Any],
-                           *, calibration_batches=None, device="cpu") -> Dict[str, Any]:
+                           *, calibration_batches=None, calibration_ids=None, device="cpu") -> Dict[str, Any]:
     """Apply a resolved analyzer plan; weighted SVD recollects bounded inputs."""
     if plan.get("kind") != "damage_aware_compression_plan" or plan.get("schema_version") != 1:
         raise ValueError("Unsupported analyzer compression plan.")
@@ -468,6 +479,19 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
     if not transformations:
         raise ValueError("Compression plan contains no accepted transformations.")
     batches = list(calibration_batches or [])
+    requires_calibration = any(item.get("method") == "weighted_svd" for item in transformations)
+    if requires_calibration:
+        if not batches:
+            raise ValueError("Applying this plan requires its original calibration data.")
+        actual_context = analysis_context(
+            fingerprint, config, calibration_batches=batches, calibration_ids=calibration_ids)
+        expected_context = plan.get("analysis_context_fingerprint")
+        if not expected_context:
+            raise ValueError("Calibration-dependent plan has no analysis-context fingerprint.")
+        if actual_context["fingerprint"] != expected_context:
+            raise ValueError(
+                "Analysis-context fingerprint mismatch: model, calibration data, preprocessing, "
+                "tokenizer, seed or analyzer configuration changed.")
     adapter = TaskAdapter(config.get("task", "classification"), config, device=device)
     options = {"seed": config.get("seed", 0), **config.get("analysis", {})}
     applied = []
@@ -483,8 +507,6 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
         )
         samples = pruning = None
         if candidate.method == "weighted_svd":
-            if not batches:
-                raise ValueError("Applying weighted SVD requires calibration data.")
             samples = collect_module_inputs(
                 model, candidate.layer_path, batches, adapter.forward,
                 max_samples=options.get("max_samples", options.get("max_rows", 256)),

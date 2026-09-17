@@ -1,6 +1,7 @@
 import copy
 from types import SimpleNamespace
 
+import pytest
 import torch
 
 from tn_compression.analyzer.schema import CandidateResult
@@ -63,6 +64,8 @@ def test_calibrated_analysis_is_non_mutating_and_records_evidence():
     assert scored and all(candidate.normalized_local_error is not None for candidate in scored)
     assert all(candidate.measured_artifact_bytes > 0 for candidate in scored)
     assert all(candidate.calibration_evidence["identifiers"] == ["cal-0"] for candidate in scored)
+    assert report.analysis_context_fingerprint
+    assert report.analysis_context["calibration_content_sha256"]
     assert model.head is original
     for name, value in state.items():
         torch.testing.assert_close(model.state_dict()[name], value)
@@ -98,6 +101,27 @@ def test_validated_plan_is_consumable_and_analysis_restores_model():
     assert result["applied"] == 1
     assert isinstance(model.head, torch.nn.Sequential)
     torch.testing.assert_close(model(torch.eye(4)), before)
+
+
+def test_weighted_plan_rejects_changed_calibration_context_before_mutation():
+    workflow = config()
+    workflow["analysis"]["candidate_grid"]["linear"]["methods"] = ["weighted_svd"]
+    workflow["analysis"]["candidate_grid"]["linear"]["ranks"] = [1]
+    model = TinyClassifier(rank_one=True)
+    original = model.head
+    calibration = batches()
+    original_bytes = sum(value.numel() * value.element_size() for value in model.state_dict().values())
+    report = analyze_model(
+        model, workflow, level="validated", calibration_batches=calibration,
+        calibration_ids=["cal-0"], validation_batches=batches(),
+        target_size_bytes=original_bytes - 1, max_quality_loss=1e-6)
+    assert report.compression_plan["transformations"][0]["method"] == "weighted_svd"
+    changed = [(calibration[0][0] + 0.25, calibration[0][1])]
+    with pytest.raises(ValueError, match="Analysis-context fingerprint mismatch"):
+        apply_compression_plan(
+            model, report.compression_plan, workflow,
+            calibration_batches=changed, calibration_ids=["cal-0"])
+    assert model.head is original
 
 
 def test_pareto_filter_marks_dominated_candidates_within_layer_only():
