@@ -117,6 +117,13 @@ installed. After planning, all accepted replacements are removed again, leaving
 the caller's model unchanged.
 
 This greedy policy is deterministic and reviewable. It is not a global optimizer.
+
+Plan application validates every path, candidate identity and calibration context,
+then materializes every replacement before installing any of them. Rollback keeps
+references to the original modules and snapshots only modes and mutable model/config
+metadata. It restores installed modules in reverse order if installation fails.
+Both original modules and materialized replacements are therefore temporarily live,
+but application does not clone the complete state dictionary or all model buffers.
 Its plan records whether the requested byte target was feasible.
 
 ## API and CLI

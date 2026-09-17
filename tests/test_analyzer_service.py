@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
+import tn_compression.analyzer.service as analyzer_service
 from tn_compression.analyzer.candidates import model_fingerprint
 from tn_compression.analyzer.schema import CandidateResult, stable_candidate_id
 from tn_compression.analyzer.service import (
@@ -244,7 +245,7 @@ def test_pruned_mlp_marks_reconstructible_projections_not_custom_parent():
                for name in ("gate_proj", "up_proj", "down_proj"))
 
 
-def test_plan_application_materializes_every_replacement_before_mutation():
+def test_plan_application_rolls_back_after_late_installation_failure(monkeypatch):
     class TwoLayers(torch.nn.Module):
         def __init__(self):
             super().__init__()
@@ -275,12 +276,27 @@ def test_plan_application_materializes_every_replacement_before_mutation():
     plan = {
         "schema_version": 1, "kind": "damage_aware_compression_plan",
         "model_fingerprint": fingerprint,
-        "transformations": [transformation("first", 1), transformation("second", 0)],
+        "transformations": [transformation("first", 1), transformation("second", 1)],
     }
-    with pytest.raises(ValueError, match="positive integer"):
+
+    real_set_submodule = analyzer_service.set_submodule_by_path
+
+    def fail_on_second_install(target, path, replacement):
+        if path == "second" and replacement is not originals[1]:
+            target.eval()
+            target.config.label = "changed"
+            target.config.injected = True
+            target._tn_transformations.append({"method": "injected"})
+            target._tn_model_spec["marker"].append(3)
+            raise RuntimeError("injected installation failure")
+        real_set_submodule(target, path, replacement)
+
+    monkeypatch.setattr(analyzer_service, "set_submodule_by_path", fail_on_second_install)
+    with pytest.raises(RuntimeError, match="injected installation failure"):
         apply_compression_plan(model, plan, workflow)
     assert (model.first, model.second) == originals
-    assert model.training and model.config.label == "original"
+    assert model.training and all(module.training for module in model.modules())
+    assert model.config.label == "original" and not hasattr(model.config, "injected")
     assert model._tn_transformations == [{"method": "existing"}]
     assert model._tn_model_spec == {"source": "custom", "marker": [1, 2]}
     for name, value in state.items():

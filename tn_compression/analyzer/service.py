@@ -534,8 +534,6 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
         replacement = materialize_candidate(model, candidate, samples, pruning)
         resolved.append((candidate.layer_path, original, replacement))
 
-    state = {name: value.detach().clone() for name, value in model.state_dict().items()}
-    buffers = [(buffer, buffer.detach().clone()) for buffer in model.buffers()]
     modes = [(module, module.training) for module in model.modules()]
     metadata = {
         name: (hasattr(model, name), copy.deepcopy(getattr(model, name, None)))
@@ -544,19 +542,17 @@ def apply_compression_plan(model: nn.Module, plan: Mapping[str, Any], config: Ma
     config_object = getattr(model, "config", None)
     config_state = copy.deepcopy(getattr(config_object, "__dict__", None))
     applied = []
+    installed = []
     try:
-        for path, _, replacement in resolved:
+        for path, original, replacement in resolved:
             set_submodule_by_path(model, path, replacement)
+            installed.append((path, original))
             applied.append(next(item for item in transformations if item["layer_path"] == path))
         model._tn_transformations = [
             *getattr(model, "_tn_transformations", []), *copy.deepcopy(applied)]
     except Exception:
-        for path, original, _ in reversed(resolved):
+        for path, original in reversed(installed):
             set_submodule_by_path(model, path, original)
-        model.load_state_dict(state, strict=True)
-        with torch.no_grad():
-            for buffer, value in buffers:
-                buffer.copy_(value)
         for module, training in modes:
             module.training = training
         for name, (existed, value) in metadata.items():
