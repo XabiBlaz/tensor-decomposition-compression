@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import io
 import json
 import math
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
@@ -59,6 +60,13 @@ def tensor_bytes(module: nn.Module, *, recurse: bool = True) -> int:
     tensors = list(module.parameters(recurse=recurse)) + list(module.buffers(recurse=recurse))
     return sum(tensor.numel() * tensor.element_size()
                for tensor in {id(tensor): tensor for tensor in tensors}.values())
+
+
+def serialized_state_bytes(module: nn.Module) -> int:
+    """Measure a standalone PyTorch state artifact, including container overhead."""
+    buffer = io.BytesIO()
+    torch.save({name: value.detach().cpu() for name, value in module.state_dict().items()}, buffer)
+    return buffer.tell()
 
 
 def _matches(path: str, includes: Sequence[str], excludes: Sequence[str]) -> bool:

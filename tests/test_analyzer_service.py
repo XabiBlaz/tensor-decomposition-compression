@@ -4,7 +4,12 @@ from types import SimpleNamespace
 import torch
 
 from tn_compression.analyzer.schema import CandidateResult
-from tn_compression.analyzer.service import analyze_model, apply_compression_plan, pareto_candidates
+from tn_compression.analyzer.service import (
+    _pruned_mlp_candidate,
+    analyze_model,
+    apply_compression_plan,
+    pareto_candidates,
+)
 
 
 class TinyClassifier(torch.nn.Module):
@@ -56,6 +61,7 @@ def test_calibrated_analysis_is_non_mutating_and_records_evidence():
                            calibration_ids=["cal-0"])
     scored = [candidate for candidate in report.candidates if candidate.status == "calibrated"]
     assert scored and all(candidate.normalized_local_error is not None for candidate in scored)
+    assert all(candidate.measured_artifact_bytes > 0 for candidate in scored)
     assert all(candidate.calibration_evidence["identifiers"] == ["cal-0"] for candidate in scored)
     assert model.head is original
     for name, value in state.items():
@@ -174,3 +180,19 @@ def test_validated_language_candidate_reports_nll_perplexity_and_kl():
                     if item.status == "validated")
     assert {"nll", "perplexity", "teacher_to_candidate_kl"} <= measured.keys()
     assert measured["teacher_to_candidate_kl"] >= 0
+
+
+def test_pruned_mlp_marks_reconstructible_projections_not_custom_parent():
+    class MLP(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.gate_proj = torch.nn.Linear(4, 6, bias=False)
+            self.up_proj = torch.nn.Linear(4, 6, bias=False)
+            self.down_proj = torch.nn.Linear(6, 4, bias=False)
+
+    candidate, indices = _pruned_mlp_candidate(
+        MLP(), {"width": 3, "selection": "weight", "seed": 0})
+    assert len(indices) == 3
+    assert not getattr(candidate, "_tn_replacement", False)
+    assert all(getattr(getattr(candidate, name), "_tn_replacement", False)
+               for name in ("gate_proj", "up_proj", "down_proj"))

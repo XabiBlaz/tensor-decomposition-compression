@@ -17,7 +17,7 @@ from ..decompositions.weighted_svd import weighted_svd
 from ..pruning import select_channels, slice_linear
 from ..quantization import round_to_nearest
 from ..tasks.vision import evaluate_vision, evaluation_mode
-from .candidates import generate_candidates, model_fingerprint, tensor_bytes
+from .candidates import generate_candidates, model_fingerprint, serialized_state_bytes, tensor_bytes
 from .schema import AnalysisReport, CandidateResult, capability
 
 
@@ -134,7 +134,6 @@ def _pruned_mlp_candidate(mlp: nn.Module, configuration: Mapping[str, Any], acti
     result.down_proj = slice_linear(result.down_proj, indices, 1)
     if hasattr(result, "intermediate_size"):
         result.intermediate_size = len(indices)
-    result._tn_replacement = True
     return result, list(indices)
 
 
@@ -162,7 +161,8 @@ def materialize_candidate(model: nn.Module, candidate: CandidateResult, samples=
             result = compress_layer(layer, policy)
     if result is None:
         raise ValueError("Candidate materialization returned no replacement.")
-    result._tn_replacement = True
+    if candidate.method != "gated_mlp_pruning":
+        result._tn_replacement = True
     return result
 
 
@@ -236,7 +236,7 @@ def _score_candidates(model, candidates, batches, adapter, options, identifiers,
             measured = reconstruction_error(model.get_submodule(candidate.layer_path), replacement, samples)
             candidate.local_error = measured
             candidate.normalized_local_error = measured["relative_squared_error"]
-            candidate.measured_artifact_bytes = tensor_bytes(replacement)
+            candidate.measured_artifact_bytes = serialized_state_bytes(replacement)
             candidate.calibration_evidence = _evidence(samples, options, identifiers, preprocessing)
             candidate.status = "calibrated"
             candidate.decision = "candidate"
