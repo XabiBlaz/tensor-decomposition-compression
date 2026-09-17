@@ -207,6 +207,7 @@ tn_compression/              # reusable public Python package
   serving.py                 # streaming clients and serving metrics
 compression/                 # workflow and report helpers retained for compatibility
 examples/configs/            # synthetic, vision, language, and serving configurations
+tests/                       # numerical, lifecycle, parity, and contract regression tests
 docs/                        # workflows, language, serving, provenance, and design notes
 containers/                  # research and serving Docker images
 ```
@@ -215,6 +216,7 @@ Start with [docs/workflows.md](docs/workflows.md) for the end-to-end lifecycle, 
 
 ## Reproducibility, safety, and scope
 
+- CI is CPU-only, offline, and uses small fixtures. GPU, ONNX, and serving studies run as separate jobs with their environment recorded.
 - Compression is not a safety guarantee. The toolkit can compare output drift, calibration behavior, and selected robustness checks, but it does not establish alignment or model safety.
 - Safety-oriented evaluation should be a separate project or an explicitly scoped extension (for example, agent reliability and oversight experiments) with its own threat model and benchmarks.
 - Established algorithms are attributed to their original publications and upstream projects. Integration code, fixes, tests, and measurements are identified separately.
