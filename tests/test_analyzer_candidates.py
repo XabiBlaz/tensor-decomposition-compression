@@ -3,6 +3,7 @@ import copy
 import pytest
 import torch
 
+import tn_compression.analyzer.candidates as analyzer_candidates
 from tn_compression.analyzer.candidates import generate_candidates, model_fingerprint
 from tn_compression.pruning import inspect_gated_mlps
 
@@ -111,6 +112,36 @@ def test_no_supported_gated_mlp_is_an_absence_not_a_discovery_failure():
         },
     })
     assert not any(item.method == "gated_mlp_pruning" for item in candidates)
+
+
+def test_pruning_checkpoint_capability_remains_unverified_without_round_trip(monkeypatch):
+    class MLP(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.gate_proj = torch.nn.Linear(4, 6, bias=False)
+            self.up_proj = torch.nn.Linear(4, 6, bias=False)
+            self.down_proj = torch.nn.Linear(6, 4, bias=False)
+
+    class Holder(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.mlp = MLP()
+
+    model = Holder()
+    monkeypatch.setattr(
+        analyzer_candidates, "_gated_mlp_groups", lambda _: ({"mlp": model.mlp}, []))
+    candidates = generate_candidates(model, {
+        "include": ["mlp"],
+        "candidate_grid": {
+            "linear": {"methods": []}, "conv2d": {"methods": []},
+            "quantization": {"enabled": False},
+            "gated_mlp": {"methods": ["gated_mlp_pruning"], "widths": [3]},
+        },
+    })
+    capability = candidates[0].checkpoint_reconstruction
+    assert capability["supported"]
+    assert not capability["verified"]
+    assert "has not run" in capability["reason"]
 
 
 def _qwen_mlp_model():

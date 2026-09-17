@@ -236,6 +236,15 @@ workflow only and cannot support model-quality conclusions.
 
 - Artifact estimates count tensor payloads, not container headers.
 - Reference quantization is dense and provides no deployment saving.
+- Structured-pruning bundle reconstruction is implemented but remains
+  `verified: false` because the optional Transformers round-trip has not run in
+  the maintained validated environment. Run it offline with:
+
+  ```bash
+  pip install -e ".[language,test]"
+  pytest -q tests/test_checkpoints.py -k analyzer_pruning_plan_round_trips
+  ```
+
 - Factorized representations have no verified vLLM loader.
 - ONNX candidates still require artifact parity checks after plan application.
 - Detection validation reports AP/AP50 but no inference-mode detector loss.

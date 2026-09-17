@@ -183,7 +183,12 @@ def _checkpoint_capability(method: str) -> Dict[str, Any]:
     if method in {"svd", "weighted_svd", "partial_tucker", "cp3", "cp4", "tensor_train"}:
         return capability(True, "tensor-only bundle has a reconstruction recipe", verified=True)
     if method == "gated_mlp_pruning":
-        return capability(True, "bundle records sliced projections and retained indices", verified=True)
+        return capability(
+            True,
+            "bundle reconstruction is implemented, but its optional Transformers round-trip "
+            "has not run in the validated environment",
+            verified=False,
+        )
     if method == "round_to_nearest":
         return capability(True, "reference remains an ordinary dense Linear", verified=True)
     return capability(False, "no reconstruction recipe")
