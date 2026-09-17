@@ -30,7 +30,8 @@ def test_candidate_generation_is_bounded_legal_and_non_mutating():
     state = copy.deepcopy(model.state_dict())
     candidates = generate_candidates(model, {
         "include": ["conv", "depthwise", "head"],
-        "max_candidates_per_layer": 2,
+        "max_candidates_per_layer": 5,
+        "max_candidates_per_method": 2,
         "candidate_grid": {
             "linear": {"methods": ["svd", "weighted_svd"], "ranks": [1, 2, 99]},
             "conv2d": {"methods": ["partial_tucker", "cp3"], "rank_ratios": [0.25, 0.5, 0.75]},
@@ -41,7 +42,8 @@ def test_candidate_generation_is_bounded_legal_and_non_mutating():
     assert {item.method for item in candidates if item.layer_path == "conv"} == {"partial_tucker", "cp3"}
     assert all(item.configuration["rank"] <= 3 for item in candidates
                if item.layer_path == "head" and item.method in {"svd", "weighted_svd"})
-    assert sum(item.method == "cp3" for item in candidates if item.layer_path == "conv") <= 2
+    assert len([item for item in candidates if item.layer_path == "conv"]) <= 5
+    assert len([item for item in candidates if item.layer_path == "head"]) <= 5
     unsupported = next(item for item in candidates if item.layer_path == "depthwise")
     assert unsupported.rejection_reason == "grouped_conv_not_supported"
     quantized = next(item for item in candidates if item.method == "round_to_nearest")
@@ -65,3 +67,19 @@ def test_backend_support_is_separate_from_method_eligibility():
     assert candidate.structurally_eligible
     assert not candidate.backend_support["supported"]
     assert candidate.decision == "rejected"
+
+
+def test_candidate_limit_is_total_per_layer_across_methods():
+    candidates = generate_candidates(TinyModel(), {
+        "include": ["head"],
+        "max_candidates_per_layer": 3,
+        "max_candidates_per_method": 4,
+        "candidate_grid": {
+            "linear": {"methods": ["svd", "weighted_svd"], "ranks": [1, 2, 3]},
+            "quantization": {"enabled": True, "bits": [4, 8], "group_sizes": [2, 4]},
+            "gated_mlp": {"methods": []},
+        },
+    })
+    assert len(candidates) == 3
+    assert [(item.method, item.configuration["rank"]) for item in candidates] == [
+        ("svd", 1), ("svd", 2), ("svd", 3)]

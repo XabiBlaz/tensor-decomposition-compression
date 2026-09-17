@@ -226,8 +226,9 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
         if isinstance(value, Mapping):
             grid.setdefault(key, {}).update(value)
     limit = int(analysis.get("max_candidates_per_layer", 12))
-    if limit < 1:
-        raise ValueError("max_candidates_per_layer must be positive.")
+    method_limit = int(analysis.get("max_candidates_per_method", limit))
+    if limit < 1 or method_limit < 1:
+        raise ValueError("Candidate limits must be positive.")
     includes = list(analysis.get("include", []))
     excludes = list(analysis.get("exclude", []))
     model_hash = fingerprint or model_fingerprint(model, analysis.get("model_identity"))
@@ -244,34 +245,44 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
             candidates.append(_unsupported(model_hash, path, module, protected_reason or layer_reason,
                                            requested_backend, protected=bool(protected_reason)))
             continue
+        layer_candidates = []
         if type(module) is nn.Linear:
             section = grid["linear"]
             for method in section.get("methods", []):
                 options = _method_options(section, method)
-                for rank in _linear_ranks(module, options, limit):
-                    candidates.append(_candidate(model_hash, path, module, method, {"rank": rank},
-                                                 _linear_parameters(module, rank), requested_backend))
+                for rank in _linear_ranks(module, options, method_limit):
+                    layer_candidates.append(_candidate(
+                        model_hash, path, module, method, {"rank": rank},
+                        _linear_parameters(module, rank), requested_backend))
             quantization = grid.get("quantization", {})
             if quantization.get("enabled", True):
-                for bits in quantization.get("bits", [])[:limit]:
-                    for group_size in quantization.get("group_sizes", [])[:limit]:
+                quantized = 0
+                for bits in quantization.get("bits", []):
+                    for group_size in quantization.get("group_sizes", []):
+                        if quantized >= method_limit:
+                            break
                         value = _candidate(model_hash, path, module, "round_to_nearest",
                                            {"bits": int(bits), "group_size": int(group_size)},
                                            sum(parameter.numel() for parameter in module.parameters(recurse=False)),
                                            requested_backend)
                         value.decision = "rejected"
                         value.decision_reason = "reference_quantization_is_dense_and_has_no_storage_saving"
-                        candidates.append(value)
+                        layer_candidates.append(value)
+                        quantized += 1
+                    if quantized >= method_limit:
+                        break
         elif type(module) is nn.Conv2d:
             section = grid["conv2d"]
             for method in section.get("methods", []):
                 options = _method_options(section, method)
-                for rank in _conv_ranks(module, method, options, limit):
+                for rank in _conv_ranks(module, method, options, method_limit):
                     config = {"rank": rank}
                     if method == "tensor_train":
                         config["structure"] = "TTPWT"
-                    candidates.append(_candidate(model_hash, path, module, method, config,
-                                                 _conv_parameters(module, method, rank), requested_backend))
+                    layer_candidates.append(_candidate(
+                        model_hash, path, module, method, config,
+                        _conv_parameters(module, method, rank), requested_backend))
+        candidates.extend(layer_candidates[:limit])
 
     section = grid.get("gated_mlp", {})
     if section.get("methods") and (not includes or any("mlp" in pattern for pattern in includes)):
@@ -286,14 +297,16 @@ def generate_candidates(model: nn.Module, analysis: Optional[Mapping[str, Any]] 
             if not widths:
                 widths = [max(1, math.floor(down.in_features * float(ratio)))
                           for ratio in section.get("width_ratios", [])]
+            layer_candidates = []
             for width in _bounded_unique((int(value) for value in widths
-                                          if 0 < int(value) <= down.in_features), limit):
+                                          if 0 < int(value) <= down.in_features), method_limit):
                 parameters = (width * gate.in_features + (width if gate.bias is not None else 0)
                               + width * up.in_features + (width if up.bias is not None else 0)
                               + down.out_features * width + (down.out_features if down.bias is not None else 0))
-                candidates.append(_candidate(
+                layer_candidates.append(_candidate(
                     model_hash, path, module, "gated_mlp_pruning",
                     {"width": width, "selection": section.get("selection", "activation")},
                     parameters, requested_backend, original_parameters=original_parameters,
                     original_bytes=original_bytes))
+            candidates.extend(layer_candidates[:limit])
     return candidates
