@@ -1,4 +1,5 @@
 import copy
+from types import SimpleNamespace
 
 import torch
 
@@ -109,3 +110,67 @@ def test_pareto_filter_marks_dominated_candidates_within_layer_only():
     other_layer = row("b", 3, 5, 0.5)
     assert pareto_candidates([dominated, winner, other_layer]) == [winner, other_layer]
     assert dominated.decision_reason == "dominated_within_layer"
+
+
+class TinyConvClassifier(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = torch.nn.Conv2d(2, 2, 3, padding=1, bias=False)
+
+    def forward(self, inputs):
+        return self.conv(inputs).mean(dim=(2, 3))
+
+
+def test_calibrated_vision_candidate_uses_bounded_feature_maps():
+    model = TinyConvClassifier()
+    workflow = {
+        "task": "classification", "num_classes": 2, "model": {"name": "tiny-conv"},
+        "analysis": {
+            "include": ["conv"], "max_samples": 2, "max_spatial_size": 4,
+            "candidate_grid": {
+                "conv2d": {"methods": ["partial_tucker"], "ranks": [[1, 1]]},
+                "linear": {"methods": []}, "quantization": {"enabled": False},
+                "gated_mlp": {"methods": []},
+            },
+        },
+    }
+    data = [(torch.randn(3, 2, 8, 8), torch.tensor([0, 1, 0]))]
+    report = analyze_model(model, workflow, level="calibrated", calibration_batches=data)
+    candidate = next(item for item in report.candidates if item.method == "partial_tucker")
+    assert candidate.status == "calibrated"
+    assert candidate.calibration_evidence["sample_shape"] == [2, 2, 4, 4]
+
+
+class TinyLanguageModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.projection = torch.nn.Linear(4, 4, bias=False)
+        with torch.no_grad():
+            self.projection.weight.copy_(torch.eye(4))
+
+    def forward(self, input_ids, attention_mask=None, use_cache=False):
+        inputs = torch.nn.functional.one_hot(input_ids, 4).float()
+        return SimpleNamespace(logits=self.projection(inputs))
+
+
+def test_validated_language_candidate_reports_nll_perplexity_and_kl():
+    model = TinyLanguageModel()
+    workflow = {
+        "task": "causal_lm", "model": {"name": "tiny-language"},
+        "analysis": {
+            "include": ["projection"], "max_samples": 8,
+            "candidate_grid": {
+                "linear": {"methods": ["svd"], "ranks": [1]},
+                "quantization": {"enabled": False}, "gated_mlp": {"methods": []},
+            },
+        },
+    }
+    data = [{"input_ids": torch.tensor([[0, 1, 2, 3]]),
+             "attention_mask": torch.ones(1, 4, dtype=torch.long)}]
+    report = analyze_model(model, workflow, level="validated",
+                           calibration_batches=data, validation_batches=data,
+                           target_size_bytes=1, max_quality_loss=10)
+    measured = next(item.full_model_metrics for item in report.candidates
+                    if item.status == "validated")
+    assert {"nll", "perplexity", "teacher_to_candidate_kl"} <= measured.keys()
+    assert measured["teacher_to_candidate_kl"] >= 0
