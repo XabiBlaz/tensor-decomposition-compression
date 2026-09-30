@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import torch
@@ -28,7 +29,7 @@ def analysis_batches(config, role):
 
 
 def vision_batches(config, role):
-    from .tasks.data import CocoDetectionDataset, OxfordPetDataset, SyntheticVisionDataset
+    from .tasks.data import CocoDetectionDataset, LabeledImageFolder, OxfordPetDataset, SyntheticVisionDataset
     from .tasks.detection import detection_collate
     data = dict(config.get("data", {}))
     kind = data.pop("kind", "synthetic")
@@ -41,6 +42,13 @@ def vision_batches(config, role):
         dataset = SyntheticVisionDataset(task=task, num_classes=classes, binary=binary, seed=seed, **data)
     elif kind == "oxford_pet":
         dataset = OxfordPetDataset(task=task, role=role, binary=binary, **data)
+    elif kind == "image_folder":
+        if task != "classification":
+            raise ValueError("Labeled image folders currently support classification only.")
+        dataset = LabeledImageFolder(data["root"], role=role, size=data.get("size", 224),
+                                     normalize=data.get("normalize", True))
+        if len(dataset.classes) != classes:
+            raise ValueError("num_classes must match the image-folder class count.")
     elif kind == "coco":
         dataset = CocoDetectionDataset(role=role, **data)
     else:
@@ -61,14 +69,16 @@ def evaluate(model, config, role, device):
         from .tasks.language import evaluate_language, load_text_split
         batches, identifiers = load_text_split(config, role)
         return {**evaluate_language(model, batches, device=device), "example_ids": identifiers, "role": role}
-    batches = vision_batches(config, role)
+    batches, identifiers = analysis_batches(config, role)
     if config.get("task") == "detection":
         from .tasks.detection import evaluate_detection
-        return evaluate_detection(model, batches, batches.dataset.coco, device=device,
-                                  category_mapping=config.get("category_mapping"))
+        return {**evaluate_detection(model, batches, batches.dataset.coco, device=device,
+                                  category_mapping=config.get("category_mapping")),
+                "example_ids": identifiers, "role": role}
     from .tasks.vision import evaluate_vision
-    return evaluate_vision(model, batches, task=config.get("task", "segmentation"),
-                           num_classes=config.get("num_classes", 3), binary=config.get("binary", False), device=device)
+    return {**evaluate_vision(model, batches, task=config.get("task", "segmentation"),
+                           num_classes=config.get("num_classes", 3), binary=config.get("binary", False), device=device),
+            "example_ids": identifiers, "role": role}
 
 
 def run(args):
@@ -77,6 +87,11 @@ def run(args):
     output.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(config.get("seed", 0))
     device = str(resolve_device(args.device, config))
+    if config.get("task") == "causal_lm" and args.command not in {"benchmark"}:
+        from .language_assets import preflight_language_assets
+        preflight_language_assets(config, allow_download=bool(os.environ.get("TN_ALLOW_HF_DOWNLOAD") == "1"),
+                                  check_data=args.command not in {"snapshot", "inspect"},
+                                  check_model=not bool(args.checkpoint))
     if args.command == "benchmark":
         if not args.checkpoint:
             raise ValueError("benchmark requires --checkpoint.")
@@ -84,9 +99,43 @@ def run(args):
         result = benchmark_bundle(args.checkpoint, device=device, task=config.get("task", "segmentation"),
                                   **config.get("benchmark", {}))
     else:
-        model = load_bundle(args.checkpoint, device=device)[0] if args.checkpoint else load_model(config["model"]).to(device)
+        if args.checkpoint:
+            model = load_bundle(args.checkpoint, device=device)[0]
+        elif config["model"].get("state_dict_path"):
+            from .vision_upload import load_vision_checkpoint
+            model = load_vision_checkpoint(config["model"]["state_dict_path"], config["model"], device=device)
+        else:
+            model = load_model(config["model"]).to(device)
         model.eval()
-        if args.command == "analyze":
+        if args.command == "snapshot":
+            manifest = save_bundle(model, output / "bundle", metadata={"workflow": config, "purpose": "original baseline"})
+            result = {"status": "saved", "bundle": str(output / "bundle"),
+                      "weights_sha256": manifest["weights_sha256"]}
+        elif args.command == "recover-lora":
+            if config["task"] != "causal_lm" or not args.checkpoint:
+                raise ValueError("LoRA recovery requires a compressed causal-LM bundle.")
+            from .tasks.language import load_text_split
+            from .tasks.lora_recovery import recover_language_lora
+            batches, identifiers = load_text_split(config, "train")
+            options = dict(config.get("lora", {}))
+            _, result = recover_language_lora(model, batches, output_dir=output,
+                                              base_bundle_path=args.checkpoint, device=device, **options)
+            result["example_ids"] = identifiers
+        elif args.command == "evaluate-lora":
+            if config["task"] != "causal_lm" or not args.checkpoint or not args.adapter:
+                raise ValueError("LoRA evaluation requires a compressed base bundle and --adapter.")
+            from .tasks.lora_recovery import load_lora_adapter
+            recovered = load_lora_adapter(args.adapter, base_bundle_path=args.checkpoint, device=device)
+            result = evaluate(recovered, config, args.role, device)
+        elif args.command == "relevance":
+            from .relevance import analyze_relevance
+            batches, identifiers = analysis_batches(config, "calibration")
+            result = analyze_relevance(model, batches, task=config["task"], device=device,
+                                       max_batches=config.get("relevance", {}).get("max_batches", 4),
+                                       max_layers=config.get("relevance", {}).get("max_layers", 64),
+                                       binary=config.get("binary", False))
+            result["example_ids"] = identifiers
+        elif args.command == "analyze":
             from .analyzer.reporting import write_analysis_artifacts
             from .analyzer.service import analyze_model
             analysis = config.get("analysis", {})
@@ -150,6 +199,12 @@ def run(args):
             result.update(workflow=config, example_ids={"calibration": calibration_ids, "validation": validation_ids})
         elif args.command in {"inspect", "plan"}:
             result = generate_compression_plan(model, compression_config(config, output), device=device).plan
+        elif args.command == "compress" and config.get("recipe"):
+            from .direct_recipe import apply_direct_recipe, direct_plan
+            result = apply_direct_recipe(model, config["recipe"], task=config["task"])
+            plan = direct_plan(result, config)
+            (output / "compression_plan.json").write_text(json.dumps(plan, indent=2) + "\n")
+            save_bundle(model, output / "bundle", metadata={"workflow": config, "direct_recipe": result})
         elif args.command == "compress" and args.plan:
             from .analyzer.service import apply_compression_plan
             plan = json.loads(Path(args.plan).read_text())
@@ -240,7 +295,7 @@ def main(argv=None):
     import logging
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Inspect, compress and evaluate configurable PyTorch models.")
-    parser.add_argument("command", choices=["inspect", "calibrate", "analyze", "plan", "compress", "train", "finetune", "evaluate", "export", "benchmark"])
+    parser.add_argument("command", choices=["inspect", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "export", "benchmark"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint")
     parser.add_argument("--output-dir", required=True)
@@ -251,6 +306,7 @@ def main(argv=None):
     parser.add_argument("--max-quality-loss", type=float)
     parser.add_argument("--backend")
     parser.add_argument("--plan", help="Compression plan produced by tn-compress analyze.")
+    parser.add_argument("--adapter", help="LoRA adapter directory for evaluate-lora.")
     args = parser.parse_args(argv)
     print(json.dumps(run(args), indent=2))
 

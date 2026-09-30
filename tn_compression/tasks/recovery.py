@@ -13,14 +13,15 @@ def recover_language(model, batches, *, token_budget, max_updates, policy="expli
     """Optimize selected parameters; count actual supervised next-token targets."""
     if token_budget < 1 or max_updates < 1 or learning_rate <= 0:
         raise ValueError("Recovery requires positive token/update budgets and learning rate.")
-    if policy not in {"full", "explicit"} or (policy == "explicit" and not layers):
-        raise ValueError("Choose full recovery or explicit nonempty layer paths.")
+    if policy not in {"full", "explicit", "trainable"} or (policy == "explicit" and not layers):
+        raise ValueError("Choose full, preselected trainable, or explicit nonempty layer paths.")
     for path in layers:
         if not list(model.get_submodule(path).parameters()):
             raise ValueError(f"Recovery layer has no parameters: {path}")
     selected = []
     for name, parameter in model.named_parameters():
-        trainable = policy == "full" or any(name == path or name.startswith(path + ".") for path in layers)
+        trainable = (policy == "full" or (policy == "trainable" and parameter.requires_grad)
+                     or any(name == path or name.startswith(path + ".") for path in layers))
         parameter.requires_grad_(trainable)
         if trainable:
             selected.append((name, parameter))
@@ -29,7 +30,7 @@ def recover_language(model, batches, *, token_budget, max_updates, policy="expli
     # The optimizer must see the final architecture and freezing policy.
     optimizer = torch.optim.AdamW([parameter for _, parameter in selected], lr=learning_rate)
     modes = [(module, module.training) for module in model.modules()]
-    model.train() if policy == "full" else model.eval()
+    model.train() if policy in {"full", "trainable"} else model.eval()
     if policy == "explicit":
         for path in layers:
             model.get_submodule(path).train()

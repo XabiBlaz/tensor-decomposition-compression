@@ -11,6 +11,7 @@ from torch import nn
 from .decompositions.common import CircularPad2d
 from .decompositions.tt import _TTConvPlain, _TTLinearCore
 from .models import load_model
+from .packed_quantization import PackedInt8Linear, PackedInt8Conv2d
 
 SCHEMA_VERSION = 1
 
@@ -27,6 +28,13 @@ def describe_module(module):
     elif type(module) is nn.Linear:
         args = {"in_features": module.in_features, "out_features": module.out_features,
                 "bias": module.bias is not None}
+    elif type(module) is PackedInt8Linear:
+        args = {"in_features": module.in_features, "out_features": module.out_features,
+                "bias": module.bias is not None}
+    elif type(module) is PackedInt8Conv2d:
+        args = {name: getattr(module, name) for name in
+                ("in_channels", "out_channels", "kernel_size", "stride", "padding", "dilation", "groups", "padding_mode")}
+        args["bias"] = module.bias is not None
     elif isinstance(module, (_TTLinearCore, _TTConvPlain)):
         args = {"core_shapes": [list(core.shape) for core in module.cores],
                 "bias_shape": list(module.bias.shape) if module.bias is not None else None}
@@ -50,7 +58,8 @@ def construct_module(description):
                                          for name, child in description["children"].items()))
     constructors = {cls.__name__: cls for cls in
                     (nn.Conv2d, nn.Linear, nn.ReflectionPad2d, nn.ReplicationPad2d,
-                     CircularPad2d, _TTLinearCore, _TTConvPlain)}
+                    CircularPad2d, _TTLinearCore, _TTConvPlain,
+                    PackedInt8Linear, PackedInt8Conv2d)}
     if kind not in constructors:
         raise ValueError(f"Unsupported checkpoint module type: {kind}")
     if kind in {"_TTLinearCore", "_TTConvPlain"}:

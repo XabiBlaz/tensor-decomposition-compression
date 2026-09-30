@@ -1,6 +1,7 @@
 """Small offline fixtures and explicit public-dataset split/mask contracts."""
 
 import hashlib
+from pathlib import Path
 
 import torch
 from torch.utils.data import Dataset
@@ -47,6 +48,43 @@ class SyntheticVisionDataset(Dataset):
         classes = 2 if self.binary else self.num_classes
         mask = (image[0] * classes).long().clamp_max(classes - 1)
         return image, mask
+
+
+class LabeledImageFolder(Dataset):
+    """Explicit, disjoint class-folder splits supplied by the user.
+
+    Layout: root/{train,calibration,validation,test}/{class_name}/image.ext.
+    The class names and ordering must match in every split. No split is
+    silently reused as a test set.
+    """
+
+    def __init__(self, root, role, *, size=224, normalize=True):
+        from torchvision.datasets import ImageFolder
+        from torchvision import transforms
+
+        root = Path(root).resolve()
+        if role not in {"train", "calibration", "validation", "test"}:
+            raise ValueError(f"Unknown image-folder split: {role}")
+        if not all((root / split).is_dir() for split in ("train", "calibration", "validation", "test")):
+            raise ValueError("Image folder needs train, calibration, validation and test subdirectories.")
+        transform = [transforms.Resize((size, size)), transforms.ToTensor()]
+        if normalize:
+            transform.append(transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]))
+        self.dataset = ImageFolder(root / role, transform=transforms.Compose(transform))
+        self.classes = self.dataset.classes
+        if not self.dataset.samples:
+            raise ValueError(f"The {role} image split is empty.")
+        for split in ("train", "calibration", "validation", "test"):
+            classes = sorted(path.name for path in (root / split).iterdir() if path.is_dir())
+            if classes != self.classes:
+                raise ValueError("All image-folder splits must have the same class directories.")
+        self.identifiers = [Path(path).resolve().relative_to(root).as_posix() for path, _ in self.dataset.samples]
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        return self.dataset[index]
 
 
 class OxfordPetDataset(Dataset):

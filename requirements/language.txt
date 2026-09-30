@@ -5,3 +5,4 @@ pyarrow==14.0.2
 pandas==2.2.3
 sentencepiece==0.2.0
 safetensors==0.5.3
+peft==0.15.2
