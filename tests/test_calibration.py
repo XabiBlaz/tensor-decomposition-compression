@@ -3,7 +3,12 @@ import copy
 import pytest
 import torch
 
-from tn_compression.calibration import candidate_intervention, collect_linear_inputs, reconstruction_error
+from tn_compression.calibration import (
+    candidate_intervention,
+    collect_linear_inputs,
+    collect_module_inputs,
+    reconstruction_error,
+)
 
 
 def test_failed_intervention_restores_module_modes_buffers_and_rng():
@@ -54,3 +59,30 @@ def test_hook_removed_when_forward_fails():
     with pytest.raises(RuntimeError):
         collect_linear_inputs(model, "0", [torch.ones(2, 5)], lambda net, batch: net(batch))
     assert not model[0]._forward_pre_hooks
+
+
+def test_convolution_sampling_is_bounded_deterministic_and_restores_state():
+    model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 3, padding=1), torch.nn.BatchNorm2d(4)).train()
+    batches = [torch.randn(3, 3, 12, 10) for _ in range(3)]
+    before = copy.deepcopy(model.state_dict())
+    kwargs = dict(max_samples=4, max_spatial_size=6, seed=7)
+    samples = collect_module_inputs(model, "0", batches, lambda net, batch: net(batch), **kwargs)
+    repeated = collect_module_inputs(model, "0", batches, lambda net, batch: net(batch), **kwargs)
+    assert samples.shape == (4, 3, 6, 6)
+    torch.testing.assert_close(samples, repeated)
+    assert model.training and model[1].training and not model[0]._forward_pre_hooks
+    for name, value in before.items():
+        torch.testing.assert_close(model.state_dict()[name], value)
+
+
+def test_convolution_reconstruction_error_uses_normalized_outputs():
+    original = torch.nn.Conv2d(2, 3, 1, bias=False, dtype=torch.float64)
+    candidate = copy.deepcopy(original)
+    inputs = torch.randn(4, 2, 5, 5, dtype=torch.float64)
+    with torch.no_grad():
+        candidate.weight.add_(0.05)
+    measured = reconstruction_error(original, candidate, inputs)
+    expected = original(inputs)
+    actual = candidate(inputs)
+    assert measured["relative_squared_error"] == pytest.approx(
+        (expected - actual).square().sum().item() / expected.square().sum().item())

@@ -2,6 +2,10 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+test-results/
 .mypy_cache/
 .ruff_cache/
 build/
@@ -16,3 +20,9 @@ compression/outputs/*
 data/
 runs/
 *.onnx
+
+# Internal planning and validation files
+/compression-project-agent-plan.md
+/docs/implementation-log.md
+/docs/source-inventory.json
+/docs/validation/

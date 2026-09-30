@@ -1,5 +1,6 @@
 """Fixed-shape ONNX export with numerical parity before advertising the artifact."""
 
+import inspect
 from pathlib import Path
 
 import torch
@@ -19,8 +20,10 @@ def export_onnx(model, inputs, path, *, rtol=1e-4, atol=1e-5):
         expected = model(inputs)
         if not isinstance(expected, torch.Tensor):
             raise ValueError("This output contract needs its own ONNX adapter.")
-        torch.onnx.export(model, inputs, str(path), input_names=["images"], output_names=["logits"],
-                          opset_version=17, dynamo=False)
+        options = {"input_names": ["images"], "output_names": ["logits"], "opset_version": 17}
+        if "dynamo" in inspect.signature(torch.onnx.export).parameters:
+            options["dynamo"] = False
+        torch.onnx.export(model, inputs, str(path), **options)
     onnx.checker.check_model(onnx.load(str(path)))
     session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
     actual = session.run(None, {"images": inputs.detach().cpu().numpy()})[0]

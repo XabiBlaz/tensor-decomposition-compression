@@ -59,6 +59,7 @@ def _worker(path, options):
     import psutil
     import torch
     from .checkpoints import load_bundle
+    from .analyzer.candidates import tensor_bytes
     from .tasks.vision import evaluation_mode
     device = options["device"]
     if options["iterations"] < 1 or options["warmup"] < 0 or options["threads"] < 1:
@@ -132,6 +133,7 @@ def _worker(path, options):
         "latency_mean_ms": statistics.mean(latencies), "latency_p50_ms": statistics.median(latencies),
         "latency_p95_ms": ordered[min(len(ordered) - 1, int(0.95 * (len(ordered) - 1)))],
         "latencies_ms": latencies, "parameters": sum(parameter.numel() for parameter in model.parameters()),
+        "tensor_bytes": tensor_bytes(model),
         "precision": str(next(model.parameters()).dtype), "timing_scope": "complete_model_forward",
     }
     if device.startswith("cuda"):
