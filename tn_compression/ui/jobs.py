@@ -255,7 +255,15 @@ class JobManager:
 
     def list(self):
         with self.lock:
-            jobs = [read_json(path) for path in self.root.glob("*/job.json")]
+            jobs = []
+            for path in self.root.glob("*/job.json"):
+                job = read_json(path)
+                if not job.get("model_name"):
+                    try:
+                        job["model_name"] = read_json(path.parent / "config.json")["model"]["name"]
+                    except (OSError, ValueError, KeyError, TypeError):
+                        pass
+                jobs.append(job)
         return sorted(jobs, key=lambda item: item["created_at"], reverse=True)
 
     def get(self, identifier):

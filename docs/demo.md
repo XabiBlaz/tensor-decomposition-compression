@@ -1,9 +1,9 @@
 # Reproducible compression demo
 
 The web interface runs at `http://localhost:7860` and stores analysis, bundles,
-benchmarks and comparisons for each run. The quickest check is **Synthetic vision
-demo**. For a more useful demonstration of the quality guardrail, train the
-**Trained synthetic classifier** baseline first. Both are synthetic workflow
+benchmarks and comparisons for each run. The quickest check is **Try a quick
+demo · vision**. For a more useful demonstration of the quality guardrail, train the
+**Try a trained synthetic classifier** baseline first. Both are synthetic workflow
 checks; neither establishes real-world model quality.
 
 ## Start the interface
@@ -12,8 +12,8 @@ checks; neither establishes real-world model quality.
 docker compose up --build -d
 ```
 
-Open `http://localhost:7860`, choose **Synthetic vision demo**, select
-**Compress & verify**, and start the run. The application is bound to localhost
+Open `http://localhost:7860`, keep **Compress a model** selected, choose
+**Try a quick demo · vision**, and start the run. The application is bound to localhost
 and runs one compression job at a time. Runs and model caches are stored in
 Docker volumes; files under `./data` are available read-only at `/data` in the
 container. The default image is CPU only. The language preset needs separately
@@ -36,7 +36,7 @@ tn-compress train --config examples/configs/demo-trained-synthetic.yaml \
 
 The command writes `data/demo-trained/bundle`. In the UI choose **Trained
 synthetic classifier**; the checkpoint field is prefilled with
-`demo-trained/bundle`. Choose **Compress & verify**. The saved bundle is checked
+`demo-trained/bundle`. Choose **Compress a model**. The saved bundle is checked
 again on the test split and benchmarked against the original bundle. An
 infeasible plan stops before producing a compressed artifact.
 

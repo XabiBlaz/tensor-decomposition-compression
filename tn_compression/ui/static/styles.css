@@ -33,3 +33,43 @@
 .method-tag{display:inline-block;padding:6px 9px;border:1px solid #cddfd1;border-radius:5px;background:#f0f6ee;font-size:11px;text-transform:capitalize}
 .download-option{margin:16px 0 0}
 @media(max-width:620px){.recovered-panel .table-scroll{margin:0 -20px -20px}.recipe-fields .fields-two{grid-template-columns:1fr}.relevance-row-head{font-size:10px}}
+
+/* The setup is read from top to bottom, even on wide screens. */
+#setup{max-width:860px;margin:0 auto}
+.setup-grid{grid-template-columns:1fr;gap:20px}
+.start-choice{margin-bottom:20px;padding-top:18px}
+.start-choice legend{font-size:19px;color:var(--ink);padding:0 7px;margin-left:-7px}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.choice-grid .mode-option{margin:0;padding:17px;min-height:85px}
+.choice-grid .mode-option strong{font-size:14px}
+.choice-grid .mode-option small{font-size:12px;line-height:1.45}
+.configuration,.objectives{padding:30px}
+.configuration label,.objectives label,.objectives legend{font-size:13px}
+.configuration input:not([type=radio]):not([type=file]),.configuration select,.objectives input:not([type=radio]):not([type=file]),.objectives select{font-size:14px;min-height:44px}
+.configuration .field-help,.objectives .field-help{font-size:12px;line-height:1.5}
+.configuration .section-heading,.objectives .section-heading{margin-bottom:20px}
+.task-context{font-size:12px;color:var(--muted);margin:0 0 18px}
+.task-context strong{color:var(--ink)}
+.recipe-fields{border:0;margin-top:0;padding-top:0}
+.recipe-fields .mode-group{margin-top:0}
+.recipe-fields .mode-option{padding:15px}
+.recipe-fields .mode-option strong{font-size:13px}
+.recipe-fields .mode-option small{font-size:12px}
+#goal-fields{border-top:1px solid var(--line);margin-top:22px;padding-top:21px}
+#goal-fields h3{margin-bottom:5px}
+.simple-details{border:1px solid var(--line);border-radius:6px;margin:15px 0}
+.simple-details summary{padding:12px 15px;font-size:12px;font-weight:600;color:var(--teal)}
+.simple-details>div{padding:0 15px 15px}
+.simple-details .field-help{margin-bottom:0}
+.readiness{font-size:13px;margin:20px 0 0;padding:15px 18px}
+.run-footer{margin-top:16px}
+.run-footer p{font-size:12px}
+.primary-button{font-size:14px;padding:14px 20px}
+.verdict{font-size:14px;font-weight:600;padding:18px 20px}
+.verdict.success{background:#e8f4e9;border-color:#b8d9bf;color:#205d3b}
+.history-drawer{flex:1;min-height:0;overflow:auto}
+.history-drawer summary{padding:4px 0 13px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.history-drawer .text-button{margin:9px 4px}
+@media(max-width:980px){.sidebar{position:static;width:100%;padding:13px 20px;border-right:0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:10px}.brand{font-size:20px}.brand small{font-size:7px;margin-top:3px}.brand-mark{font-size:29px}.new-run{margin:0;width:auto;align-self:center}.history-heading,.sidebar-footer{display:none}.history{grid-column:1/-1;display:flex;gap:8px;max-height:72px;overflow:auto}.history-item{min-width:145px;width:145px;padding:7px 9px;margin:0}.history-item small{margin-top:2px}.history-item .history-state{margin-top:2px}.history>p{padding:0}.topbar{display:none}main{margin-left:0}.workspace{padding:28px 22px}}
+@media(max-width:980px){.history-drawer{grid-column:1/-1}.history-drawer summary{padding:2px 0;font-size:11px;text-transform:none;letter-spacing:0}.history-drawer:not([open]){height:22px}}
+@media(max-width:620px){.choice-grid,.fields-two{grid-template-columns:1fr}.workspace{padding:24px 16px}.panel{padding:20px}.start-choice legend{font-size:17px}.intro h1{font-size:30px}.workflow{font-size:11px}.workflow b{width:23px;height:23px}.configuration,.objectives{padding:22px}.run-footer{align-items:stretch}.run-footer p{line-height:1.45}.simple-details>div{padding:0 12px 12px}}

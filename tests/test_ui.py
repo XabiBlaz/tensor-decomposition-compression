@@ -37,6 +37,11 @@ class UIJobsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "trained checkpoint"):
             validate_request(self.payload(), self.data)
 
+    def test_own_vision_starting_choice_requires_trained_weights(self):
+        config = next(preset["config"] for preset in read_json(PRESETS) if preset["id"] == "own-vision")
+        with self.assertRaisesRegex(ValueError, "trained checkpoint"):
+            validate_request(self.payload(config=config), self.data)
+
     def test_invalid_source_and_nonfinite_target_rejected(self):
         self.config["model"]["source"] = "torch_hub"
         with self.assertRaisesRegex(ValueError, "TorchVision"):
@@ -100,8 +105,10 @@ class UIJobsTests(unittest.TestCase):
         run = self.root / "runs" / ("a" * 32)
         run.mkdir(parents=True)
         (run / "job.json").write_text(json.dumps({"id": run.name, "status": "running", "created_at": "today"}))
+        (run / "config.json").write_text(json.dumps({"model": {"name": "resnet18"}}))
         manager = self.manager()
         self.assertEqual(manager.list()[0]["status"], "interrupted")
+        self.assertEqual(manager.list()[0]["model_name"], "resnet18")
 
     def test_http_same_origin_and_artifact_traversal(self):
         manager = self.manager()

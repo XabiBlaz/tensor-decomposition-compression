@@ -1,8 +1,8 @@
 [
   {
     "id": "smoke",
-    "name": "Synthetic vision demo",
-    "description": "An offline ResNet18 workflow with random weights and eight synthetic images. Tests the mechanics; it cannot establish model quality.",
+    "name": "Try a quick demo · vision",
+    "description": "Runs immediately with random weights and synthetic images. Use it to learn the interface; it is not a quality result.",
     "config": {
       "seed": 0,
       "task": "classification",
@@ -83,8 +83,29 @@
     }
   },
   {
+    "id": "own-vision",
+    "name": "Use my trained vision classifier",
+    "description": "Upload trained TorchVision .pt/.pth weights, choose the matching architecture and class count, and point to labeled image folders under data/.",
+    "config": {
+      "seed": 0,
+      "task": "classification",
+      "num_classes": 2,
+      "model": {
+        "source": "torchvision",
+        "name": "resnet18",
+        "weights": null,
+        "task": "classification",
+        "kwargs": { "num_classes": 2 }
+      },
+      "data": { "kind": "image_folder", "root": "", "size": 224, "batch_size": 8 },
+      "analysis": { "level": "validated", "backend": "pytorch", "quality_metric": "top1", "max_quality_loss": 0.02 },
+      "recipe": { "methods": ["tensor_decomposition"], "svd_energy": 0.95 },
+      "benchmark": { "input_shape": [1, 3, 224, 224], "warmup": 3, "iterations": 20, "threads": 2 }
+    }
+  },
+  {
     "id": "trained-synthetic",
-    "name": "Trained synthetic classifier",
+    "name": "Try a trained synthetic classifier",
     "description": "A reproducible three-epoch color-classification model. Train it first, then compress its bundle. Synthetic results are workflow evidence only.",
     "checkpoint": "demo-trained/bundle",
     "config": {
@@ -166,7 +187,7 @@
   },
   {
     "id": "vision",
-    "name": "Trained Pet segmentation",
+    "name": "Use my trained segmentation model",
     "description": "Analyze a trained U-Net bundle on Oxford-IIIT Pet. Requires a matching checkpoint and prepared dataset under the data mount.",
     "config": {
       "seed": 0,
@@ -238,8 +259,8 @@
   },
   {
     "id": "language",
-    "name": "Small language pilot",
-    "description": "Pinned Qwen2.5-0.5B and WikiText assets must be cached first. Eight short examples are a pilot, not a production quality assessment.",
+    "name": "Use a Hugging Face language model",
+    "description": "Start with pinned Qwen2.5-0.5B and WikiText. Enable downloads below if they are not cached. Eight short examples are only a pilot.",
     "config": {
       "seed": 0,
       "task": "causal_lm",

@@ -51,7 +51,7 @@ using the wrong preprocessing invalidates the quality comparison.
 
 ## What the controls measure
 
-**Analyze relevance** uses calibration examples to plot each eligible layer's
+**Inspect layer importance** uses calibration examples to plot each eligible layer's
 mean absolute weight-times-gradient score, with gradient RMS as a companion
 number. Larger bars show stronger local loss sensitivity on those examples;
 they do not prove that a layer must be kept dense. See [the metric and source
