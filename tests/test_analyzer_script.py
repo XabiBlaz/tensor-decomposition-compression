@@ -1,6 +1,15 @@
 import subprocess
 import os
+import shutil
 from pathlib import Path
+
+import pytest
+
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("git") is None or shutil.which("bash") is None,
+    reason="experiment script requires Git and Bash",
+)
 
 
 def command(*args):
