@@ -260,7 +260,7 @@
   {
     "id": "language",
     "name": "Use a Hugging Face language model",
-    "description": "Start with pinned Qwen2.5-0.5B and WikiText. Enable downloads below if they are not cached. Eight short examples are only a pilot.",
+    "description": "Start with pinned Qwen2.5-0.5B and WikiText. Missing files download on the first run. Eight short examples are only a pilot.",
     "config": {
       "seed": 0,
       "task": "causal_lm",

@@ -155,6 +155,7 @@
     const preset = state.presets.find((item) => item.id === $("preset").value);
     if (!preset) return;
     state.config = clone(preset.config); state.targetEdited = false; $("preset-description").textContent = preset.description || "";
+    $("allow-download").checked = isLanguage();
     $("checkpoint").value = preset.checkpoint || state.config.model?.checkpoint || "";
     $("checkpoint-details").open = Boolean($("checkpoint").value);
     syncFields();

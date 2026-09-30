@@ -95,8 +95,8 @@ synthetic images, not proof of real-world accuracy.
 The language input accepts a local compatible Hugging Face causal LM or a
 repository ID pinned to a full commit revision; the tokenizer and any Hugging
 Face dataset are pinned separately. The default Docker image starts offline. If
-the pinned files are absent, select **Allow Hugging Face downloads** for the
-first run. They remain in the persistent cache for later offline runs. Custom
+the pinned files are absent, keep **Download missing Hugging Face files** selected
+for the first run. They remain in the persistent cache for later offline runs. Custom
 remote Python model code is disabled.
 
 Optional language recovery trains a LoRA adapter on a separate text training
