@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "status": "synthetic_only",
+  "reasons": [
+    "Synthetic or untrained baseline: integration evidence only, not real-world quality evidence."
+  ],
+  "plan_status": "feasible",
+  "transformations": 1,
+  "evaluation": {
+    "role": "test",
+    "same_examples": true,
+    "example_count": 96,
+    "metrics": {
+      "examples": {
+        "original": 96,
+        "compressed": 96,
+        "change": 0
+      },
+      "loss": {
+        "original": 0.009456045421150824,
+        "compressed": 0.009902835396739343,
+        "change": 0.0004467899755885192
+      },
+      "top1": {
+        "original": 1.0,
+        "compressed": 1.0,
+        "change": 0.0
+      }
+    }
+  },
+  "quality": {
+    "metric": "top1",
+    "direction": "higher",
+    "units": "absolute_fraction",
+    "loss": 0.0,
+    "maximum_loss": 0.02,
+    "passed": true
+  },
+  "resources": {
+    "parameters": {
+      "original": 11178051,
+      "compressed": 9670723,
+      "change": -1507328
+    },
+    "tensor_bytes": {
+      "original": 44750764,
+      "compressed": 38721452,
+      "change": -6029312
+    },
+    "latency_mean_ms": {
+      "original": 4.629445349999628,
+      "compressed": 3.632440900011602,
+      "change": -0.997004449988026
+    },
+    "latency_p50_ms": {
+      "original": 3.82258450002837,
+      "compressed": 3.4120030000224233,
+      "change": -0.4105815000059465
+    },
+    "latency_p95_ms": {
+      "original": 8.671656999979405,
+      "compressed": 5.020501999979388,
+      "change": -3.651155000000017
+    },
+    "rss_load_peak_bytes": {
+      "original": 422797312,
+      "compressed": 419545088,
+      "change": -3252224
+    },
+    "rss_inference_peak_bytes": {
+      "original": 392036352,
+      "compressed": 419545088,
+      "change": 27508736
+    },
+    "bundle_file_bytes": {
+      "original": 44792433,
+      "compressed": 38773875,
+      "change": -6018558
+    }
+  },
+  "size_target": {
+    "maximum_tensor_bytes": 41943040,
+    "actual_tensor_bytes": 38721452,
+    "passed": true
+  },
+  "benchmark_status": {
+    "original": "ok",
+    "compressed": "ok",
+    "same_workload": true,
+    "measurements_valid": true
+  },
+  "size_target_scope": "Analyzer target is tensor bytes; bundle_file_bytes is actual serialized file size.",
+  "timing_scope": "complete_model_forward",
+  "synthetic_baseline": true
+}

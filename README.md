@@ -38,6 +38,13 @@ The result is an auditable answer to a practical question:
 
 Python 3.11 is the reference environment; Python 3.9+ is supported.
 
+For the guided local UI, run `docker compose up --build -d` and open
+`http://localhost:7860`. It supports safe vision state-dictionary uploads,
+layer-relevance plots, selected compression methods, and original-versus-
+compressed measurements. See the [own-model guide](docs/user-demo.md) and the
+[measured synthetic demonstration](docs/demo.md). Real quality evidence needs a
+trained model and representative held-out data.
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -78,11 +85,15 @@ This example is deliberately small and offline: it proves the lifecycle, not rea
 | Approach | Best suited to | Available implementations |
 | --- | --- | --- |
 | Tensor decomposition | Convolutional and dense weights with exploitable tensor structure | Tensor Train / TTPWT, Partial Tucker, CP3, CP4 |
-| Low-rank approximation | Linear layers and projections | SVD, activation-weighted SVD |
-| Quantization | Language-model linear weights | Dense round-to-nearest reference, maintained GPTQ W4A16 example |
+| Low-rank approximation | Linear layers and projections | SVD, activation-weighted SVD, direct SVD-energy selection for compatible Linear/Conv2d layers |
+| Quantization | Compatible Linear/Conv2d weights | Portable int8 weight storage, dense round-to-nearest reference, maintained GPTQ W4A16 example |
 | Structured pruning | Compatible gated MLP blocks | Coupled channel removal across gate/up/down projections |
 
 Every method declares the module types, layouts, dtypes, and runtimes it supports. Fused kernels, tied weights, grouped convolutions, custom forwards, and unusual layouts need an adapter; the inspector reports these cases instead of silently changing them.
+
+The int8 storage path dequantizes during PyTorch inference. Smaller saved weights
+do not imply a faster model. Physical pruning currently supports verified
+Llama/Qwen gated MLPs, not arbitrary vision networks.
 
 ### Models, tasks, and runtimes
 
@@ -94,7 +105,7 @@ Every method declares the module types, layouts, dtypes, and runtimes it support
 | Execution | PyTorch CPU/CUDA, ONNX Runtime for supported vision paths, experimental vLLM serving path |
 | Measurements | Parameters, serialized bytes, CPU RSS, CUDA memory, latency distributions, throughput, TTFT, inter-token latency |
 
-The benchmark models are stable fixtures, not an allowlist. A model is supported when it satisfies the selected model × method × task × backend contract.
+The benchmark models are stable fixtures, not an allowlist. A model is supported when it satisfies the selected model × method × task × backend contract. The UI accepts pinned Hugging Face causal LMs and declared TorchVision/SMP vision architectures; a `.pt` upload must contain tensor-only weights. A trusted serialized Python model can be converted locally using [the export script](scripts/export_trusted_pt_state.py).
 
 ## How a compression decision is made
 
@@ -161,7 +172,8 @@ containers/              Research and serving environments
 - [Runnable workflows](docs/workflows.md) — the full train → compress → recover → evaluate → export → benchmark lifecycle
 - [Language experiments](docs/language.md) — calibrated low-rank, pruning, quantization, and Qwen pilot details
 - [Serving and quantization](docs/serving.md) — backend compatibility and measurement protocol
-- [Implementation evidence](docs/implementation-log.md) — milestone validation and recorded results
+- [Demo measurements](docs/demo.md) — recorded synthetic integration results and their limits
+- [Layer relevance](docs/relevance.md) — gradient metric, plot meaning, and source papers
 - [Provenance](docs/provenance.md) — source attribution and implementation lineage
 
 ## Scope

@@ -1,0 +1,21 @@
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: containers/ui.Dockerfile
+    ports:
+      - "127.0.0.1:7860:7860"
+    volumes:
+      - compression-runs:/runs
+      - ./data:/data:ro
+      - compression-cache:/cache
+      - compression-uploads:/uploads
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  compression-runs:
+  compression-cache:
+  compression-uploads:

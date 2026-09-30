@@ -28,6 +28,44 @@ the official test data is untouched until final evaluation. Binary mode maps
 pet/background to 1/0 and ignores border pixels (255); multiclass maps 1/2/3 to
 0/1/2. Masks use nearest-neighbor resizing.
 
+## Comparable analyzer experiments
+
+The vision analyzer suite requires an explicitly trained reconstructible bundle.
+Train with the same model and data configuration first, or supply an existing
+compatible bundle. A pretrained encoder alone is not a trained segmentation head.
+
+```sh
+scripts/run_analyzer_experiments.sh --suite vision \
+  --vision-config examples/configs/analyzer-vision.yaml \
+  --vision-checkpoint runs/pet-trained/bundle --device cuda
+```
+
+Use `--allow-synthetic-baseline` only for integration checks with an untrained
+vision model. Such comparisons are labeled `synthetic_only`, as is the smoke
+suite. All suites keep downloads disabled; populate caches and configure paths
+before running. `tn-compress snapshot --config CONFIG --output-dir runs/original`
+saves the original model as `runs/original/bundle` for reproducible measurements.
+It also accepts `--checkpoint` to copy an existing bundle through strict reload.
+
+Each suite snapshots the original weights, evaluates original and compressed
+bundles on the same held-out test examples, and benchmarks both in isolated
+processes using the same workload. `comparison.json` and `comparison.md` contain
+quality metric changes, actual serialized bundle bytes, latency, and available
+memory counters. The analyzer's size target remains **tensor bytes**, not the
+serialized bundle's file size. Negative byte or latency changes indicate savings;
+parameter reduction alone does not imply a speedup.
+
+The final reloaded artifact must satisfy the plan's quality metric and absolute
+loss limit on the test split. Missing/nonfinite metrics, mismatched examples,
+failed benchmarks, infeasible plans and plans with no transformations cannot be
+reported as verified compression. An infeasible or unchanged plan writes a report
+and skips compression. A run's `complete` marker only means the workflow finished;
+inspect the comparison outcome before drawing conclusions. A final test failure
+should be reported as a failure; do not repeatedly tune on the held-out test set.
+
+Resume signatures include trained checkpoint contents, so changing a checkpoint
+in place invalidates existing stages. Use a new run ID for changed inputs.
+
 ## Model selection and reconstruction
 
 `model.source` supports TorchVision, SMP, Transformers, PyTorch Hub and custom
