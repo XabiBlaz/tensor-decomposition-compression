@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-01",
+  "model": {
+    "name": "Qwen/Qwen2.5-0.5B",
+    "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+    "precision": "torch.float32"
+  },
+  "dataset": {
+    "name": "Salesforce/wikitext",
+    "revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+    "subset": "wikitext-2-raw-v1",
+    "examples_per_role": 32,
+    "max_length": 128,
+    "valid_tokens": {"calibration": 3479, "validation": 3103, "test": 3421},
+    "example_provenance": "docs/qwen-demo-example-provenance.json"
+  },
+  "selection": {
+    "metric": "validation_nll",
+    "dense": {"nll": 3.247850907989905, "perplexity": 25.734973618683817},
+    "trials": [
+      {"id": "int8", "status": "ok", "nll": 3.2614039655581544, "perplexity": 26.08613548086392},
+      {"id": "svd-final-down-92", "status": "ok", "nll": 3.47745984514183, "perplexity": 32.37737398786431},
+      {"id": "svd-final-down-90", "status": "ok", "nll": 3.491036439994593, "perplexity": 32.81994598924196}
+    ],
+    "selected": "int8"
+  },
+  "held_out_test": {
+    "dense": {"nll": 3.051947711051399, "perplexity": 21.156511089598595},
+    "selected": {"nll": 3.0672843640953853, "perplexity": 21.483482071092},
+    "nll_guardrail": 0.1,
+    "passed": true
+  },
+  "artifacts": {
+    "dense_bundle_bytes": 2520795515,
+    "selected_bundle_bytes": 1448664154,
+    "dense_tensor_bytes": 1976131200,
+    "selected_tensor_bytes": 903868032
+  },
+  "benchmark": {
+    "gpu": "GeForce RTX 2080 Ti",
+    "gpu_memory_mib": 11019,
+    "driver": "460.106.00",
+    "torch": "2.6.0+cu118",
+    "cuda_runtime": "11.8",
+    "prompt_tokens": 64,
+    "output_tokens": 32,
+    "warmup": 3,
+    "iterations": 10,
+    "dense": {
+      "latency_mean_ms": 761.2257005181164,
+      "latency_p50_ms": 752.2012195549905,
+      "latency_p95_ms": 797.2822161391377,
+      "tokens_per_second": 42.03746665176924,
+      "cuda_allocated_peak_bytes": 2027881984,
+      "cuda_reserved_peak_bytes": 2162163712,
+      "rss_inference_peak_bytes": 2607751168
+    },
+    "selected": {
+      "latency_mean_ms": 1028.399577527307,
+      "latency_p50_ms": 1008.8487324537709,
+      "latency_p95_ms": 1120.8349240478128,
+      "tokens_per_second": 31.116309943398736,
+      "cuda_allocated_peak_bytes": 989454848,
+      "cuda_reserved_peak_bytes": 1075838976,
+      "rss_inference_peak_bytes": 2833252352
+    }
+  },
+  "generation": {
+    "status": "verified",
+    "generated_tokens": 24,
+    "cache_step_matches_full_prefix": true,
+    "maximum_logit_error": 0.000016927719116210938
+  },
+  "onnx": {
+    "status": "verified_fixed_shape_logits_only",
+    "serving_ready": false,
+    "shape": [1, 128],
+    "runtime": "onnxruntime",
+    "active_providers": ["CPUExecutionProvider"],
+    "provider_fallback": false,
+    "artifact_bytes": 905206965,
+    "maximum_logit_error": 0.00020456314086914062,
+    "rtol": 0.001,
+    "atol": 0.0003,
+    "cache_interface": false
+  },
+  "ui_verification": {
+    "first_run_downloads": true,
+    "offline_cache_run": true,
+    "cache_only_runtime_seconds": 948.714836
+  },
+  "limitations": [
+    "The selected portable int8 PyTorch path is smaller but slower on this workload.",
+    "No LoRA recovery was used.",
+    "Language ONNX is not serving-ready without a verified autoregressive cache interface."
+  ]
+}

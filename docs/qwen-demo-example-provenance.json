@@ -1,0 +1,408 @@
+{
+  "schema_version": 1,
+  "dataset": "Salesforce/wikitext",
+  "revision": "b08601e04326c79dfdd32d625aee71d232d685c3",
+  "selection_seed": 0,
+  "max_length": 128,
+  "roles": {
+    "calibration": {
+      "examples": [
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:34016",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:16235",
+          "valid_tokens": 42
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:33970",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:7990",
+          "valid_tokens": 78
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:17316",
+          "valid_tokens": 119
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:524",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:8390",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:14673",
+          "valid_tokens": 120
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:2867",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:16036",
+          "valid_tokens": 107
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:12019",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:8274",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:19950",
+          "valid_tokens": 103
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:11290",
+          "valid_tokens": 34
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:4400",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:20077",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:26800",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:1812",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:7247",
+          "valid_tokens": 47
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:16786",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:24300",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:8719",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:7696",
+          "valid_tokens": 81
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:18610",
+          "valid_tokens": 69
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:15356",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:30298",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:4798",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:34087",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:4253",
+          "valid_tokens": 27
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:3823",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:28258",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:train:21658",
+          "valid_tokens": 112
+        }
+      ],
+      "total_valid_tokens": 3479
+    },
+    "validation": {
+      "examples": [
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1937",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:314",
+          "valid_tokens": 99
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:535",
+          "valid_tokens": 76
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1487",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1100",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1526",
+          "valid_tokens": 53
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2884",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:3010",
+          "valid_tokens": 81
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2855",
+          "valid_tokens": 119
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2862",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:407",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1856",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:3137",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:36",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:3028",
+          "valid_tokens": 102
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1964",
+          "valid_tokens": 63
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:3563",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2434",
+          "valid_tokens": 90
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1539",
+          "valid_tokens": 78
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2485",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:370",
+          "valid_tokens": 48
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1565",
+          "valid_tokens": 42
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2793",
+          "valid_tokens": 99
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1284",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2517",
+          "valid_tokens": 43
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2378",
+          "valid_tokens": 71
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:1779",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2402",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:3661",
+          "valid_tokens": 21
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:527",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2987",
+          "valid_tokens": 74
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:validation:2668",
+          "valid_tokens": 39
+        }
+      ],
+      "total_valid_tokens": 3103
+    },
+    "test": {
+      "examples": [
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:3167",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2461",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1621",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2241",
+          "valid_tokens": 119
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1296",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1123",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:3085",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1153",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2867",
+          "valid_tokens": 92
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2813",
+          "valid_tokens": 77
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:101",
+          "valid_tokens": 72
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2803",
+          "valid_tokens": 76
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2700",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:4217",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2485",
+          "valid_tokens": 87
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2671",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2433",
+          "valid_tokens": 109
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:4035",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:3257",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:566",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1637",
+          "valid_tokens": 69
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2853",
+          "valid_tokens": 69
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2101",
+          "valid_tokens": 116
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2845",
+          "valid_tokens": 75
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2471",
+          "valid_tokens": 112
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1526",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1162",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:2995",
+          "valid_tokens": 80
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:3932",
+          "valid_tokens": 127
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:3193",
+          "valid_tokens": 61
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:1037",
+          "valid_tokens": 48
+        },
+        {
+          "id": "Salesforce/wikitext@b08601e04326c79dfdd32d625aee71d232d685c3:test:731",
+          "valid_tokens": 127
+        }
+      ],
+      "total_valid_tokens": 3421
+    }
+  }
+}

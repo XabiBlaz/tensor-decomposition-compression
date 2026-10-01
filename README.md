@@ -42,8 +42,16 @@ For the guided local UI, run `docker compose up --build -d` and open
 `http://localhost:7860`. It supports safe vision state-dictionary uploads,
 layer-relevance plots, selected compression methods, and original-versus-
 compressed measurements. See the [own-model guide](docs/user-demo.md) and the
-[measured synthetic demonstration](docs/demo.md). Real quality evidence needs a
-trained model and representative held-out data.
+[Qwen demo runbook](docs/qwen-demo.md). The default image remains CPU-only. On
+an NVIDIA host, use the optional CUDA overlay:
+
+```bash
+docker compose -f compose.yaml -f compose.gpu.yaml up --build -d
+```
+
+The language preset performs a fixed validation-only comparison before touching
+held-out test metrics. Real vision quality evidence still needs a trained model
+and representative held-out data.
 
 ```bash
 python -m venv .venv
@@ -171,6 +179,7 @@ containers/              Research and serving environments
 
 - [Runnable workflows](docs/workflows.md) — the full train → compress → recover → evaluate → export → benchmark lifecycle
 - [Language experiments](docs/language.md) — calibrated low-rank, pruning, quantization, and Qwen pilot details
+- [Qwen UI demo](docs/qwen-demo.md) — setup, clicks, measured GPU result, artifacts, and limitations
 - [Serving and quantization](docs/serving.md) — backend compatibility and measurement protocol
 - [Demo measurements](docs/demo.md) — recorded synthetic integration results and their limits
 - [Layer relevance](docs/relevance.md) — gradient metric, plot meaning, and source papers

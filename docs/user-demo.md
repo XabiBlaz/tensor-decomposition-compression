@@ -99,6 +99,13 @@ the pinned files are absent, keep **Download missing Hugging Face files** select
 for the first run. They remain in the persistent cache for later offline runs. Custom
 remote Python model code is disabled.
 
+The Qwen preset is a fixed study rather than an open-ended test-set loop. It
+records a dense calibration measurement, evaluates the dense validation
+baseline, tries packed int8 and two selective SVD settings independently on
+validation, and selects the lowest finite validation NLL. The test split is
+evaluated only after selection, once for the dense bundle and once for the
+selected reloaded bundle. See the [runbook and measured result](qwen-demo.md).
+
 Optional language recovery trains a LoRA adapter on a separate text training
 split. The adapter is saved alongside metadata containing the compressed base
 bundle checksum; the adapter alone is not a complete model. The recovered

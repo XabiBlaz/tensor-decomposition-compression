@@ -13,11 +13,11 @@ are outside the current supported set. A model may load successfully yet have
 unsupported layers for a selected compression method; review the plan and final
 evaluation before treating it as a usable result.
 
-The Docker image defaults to `HF_HUB_OFFLINE=1` and `HF_DATASETS_OFFLINE=1`.
-Thus the Qwen example fails on a fresh cache at the initial model load. Select
-the UI's explicit download option for the first run, with Internet access and
-enough cache space, or place a complete pinned model/tokenizer and dataset in
-the mounted cache. Subsequent runs can use the cache offline. The language
+The Docker images default to `HF_HUB_OFFLINE=1` and `HF_DATASETS_OFFLINE=1`.
+Select the UI's explicit download option for the first run, with Internet access
+and enough cache space, or place a complete pinned model/tokenizer and dataset
+in the mounted cache. Each job starts a child process with online mode only when
+that checkbox is selected; subsequent runs can enforce cache-only operation. The language
 preflight checks for the config, tokenizer, all weight shards and the requested
 data splits before saving the original bundle. It reports missing assets rather
 than substituting untrained weights. A local `text_json` dataset avoids the
@@ -43,12 +43,13 @@ using them: the first Qwen up projection is very sensitive in this pilot.
 Compression is explicit; `plan` performs temporary interventions and restores
 the model. It does not choose a final jointly validated allocation yet.
 
-Qwen2.5-0.5B was selected for its standard gated MLP, tied embeddings, small CPU
+Qwen2.5-0.5B was selected for its standard gated MLP, tied embeddings, small GPU
 footprint and Apache-2.0 model license. Model and tokenizer revision:
 `060db6499f32faf8b98477b0a26969ef7d8b9987`. WikiText revision:
-`b08601e04326c79dfdd32d625aee71d232d685c3`. Calibration uses train, allocation uses
-validation, and test is reserved for reporting. Each role uses eight seeded
-hash-selected text examples, truncated to 128 tokens. All IDs are recorded.
+`b08601e04326c79dfdd32d625aee71d232d685c3`. The maintained UI study uses train
+for a disjoint calibration/provenance measurement, validation for candidate
+selection, and test only after selection. Each role uses 32 seeded hash-selected
+text examples, truncated to 128 tokens. All IDs and valid token counts are recorded.
 The loader rejects ID and normalized-text overlap between roles; use explicit
 `text_json` records for custom partitions. A separate-domain slice is pending.
 
@@ -61,7 +62,7 @@ full-model loss Hessian. Optional teacher KL compares teacher to candidate at
 declared temperature with CPU chunks, while model forward logits still have the
 normal per-batch vocabulary allocation.
 
-## CPU pilot
+## Historical CPU pilot
 
 [The raw Qwen pilot result](qwen-pilot-results.json) records the unmodified Qwen checkpoint and three
 isolated SVD trials on `model.layers.0.mlp.up_proj` in float32, PyTorch 2.6.0 CPU,
@@ -77,6 +78,9 @@ it uses a different split and must not be compared directly with candidate
 validation scores. Tiny offline Qwen/Llama tests cover reload, generation/cache,
 token masks, split separation and intervention restoration. No downstream-task,
 GPU-speed or serving-quality claims follow from this pilot.
+
+For the current UI protocol, GPU measurements, selected int8 result, cache
+verification, and ONNX boundary, use the [Qwen demo runbook](qwen-demo.md).
 
 ## Optional LoRA recovery
 
