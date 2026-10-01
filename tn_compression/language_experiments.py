@@ -2,6 +2,7 @@
 
 import time
 import copy
+import fnmatch
 
 import torch
 
@@ -10,6 +11,35 @@ from .calibration import candidate_intervention, collect_linear_inputs, reconstr
 from .decompositions.cp import cp_linear
 from .decompositions.weighted_svd import weighted_svd
 from .tasks.language import evaluate_language, model_inputs
+
+
+def inspect_language_layers(model, trials=()):
+    """Describe method eligibility without changing the model."""
+    from .api import protected_module_reasons
+
+    protected = protected_module_reasons(model)
+    rows = []
+    for path, module in model.named_modules():
+        if type(module) is not torch.nn.Linear:
+            continue
+        reason = protected.get(path.replace(".", "/"))
+        selected_by = []
+        for trial in trials or ():
+            recipe = trial.get("recipe", {})
+            includes, excludes = recipe.get("include", []), recipe.get("exclude", [])
+            if ((not includes or any(fnmatch.fnmatchcase(path, pattern) for pattern in includes))
+                    and not any(fnmatch.fnmatchcase(path, pattern) for pattern in excludes)):
+                selected_by.append(trial.get("id"))
+        rows.append({
+            "path": path, "type": "Linear", "in_features": module.in_features,
+            "out_features": module.out_features,
+            "tensor_bytes": tensor_bytes(module), "protected_reason": reason,
+            "supported_methods": [] if reason else ["int8_weight_storage", "svd_energy"],
+            "selected_by_trials": selected_by,
+        })
+    return {"status": "inspected", "linear_layers": rows,
+            "eligible_linear_layers": sum(not row["protected_reason"] for row in rows),
+            "note": "Eligibility is structural. Validation NLL determines the study selection."}
 
 
 def tensor_bytes(module):

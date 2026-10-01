@@ -259,8 +259,8 @@
   },
   {
     "id": "language",
-    "name": "Use a Hugging Face language model",
-    "description": "Start with pinned Qwen2.5-0.5B and WikiText. Missing files download on the first run. Eight short examples are only a pilot.",
+    "name": "Run the Qwen2.5 language study",
+    "description": "Pinned Qwen2.5-0.5B and WikiText with fixed disjoint 32-example splits. The UI compares packed int8 and two selective SVD trials on validation before one held-out test evaluation.",
     "config": {
       "seed": 0,
       "task": "causal_lm",
@@ -284,54 +284,77 @@
           "validation": "validation",
           "test": "test"
         },
-        "samples": 8,
+        "samples": {
+          "calibration": 32,
+          "validation": 32,
+          "test": 32
+        },
         "max_length": 128,
         "batch_size": 1
       },
       "analysis": {
         "level": "validated",
         "backend": "pytorch",
-        "target_size_mb": 1800,
         "max_quality_loss": 0.1,
-        "quality_metric": "nll",
-        "include": [
-          "model.layers.0.mlp.up_proj",
-          "model.layers.0.mlp.down_proj"
-        ],
-        "max_samples": 128,
-        "max_validated_per_layer": 2,
-        "candidate_grid": {
-          "linear": {
-            "methods": [
-              "svd",
-              "weighted_svd"
-            ],
-            "ranks": [
-              128,
-              256,
-              384
-            ]
+        "quality_metric": "nll"
+      },
+      "language_study": {
+        "trials": [
+          {
+            "id": "int8",
+            "label": "Packed int8 weights",
+            "recipe": {
+              "methods": [
+                "quantization"
+              ],
+              "quantization_bits": 8,
+              "include": [
+                "model.layers.*"
+              ]
+            }
           },
-          "conv2d": {
-            "methods": []
+          {
+            "id": "svd-final-down-92",
+            "label": "Selective SVD, 92% energy",
+            "recipe": {
+              "methods": [
+                "tensor_decomposition"
+              ],
+              "svd_energy": 0.92,
+              "include": [
+                "model.layers.23.mlp.down_proj"
+              ]
+            }
           },
-          "quantization": {
-            "enabled": false
-          },
-          "gated_mlp": {
-            "methods": []
+          {
+            "id": "svd-final-down-90",
+            "label": "Selective SVD, 90% energy",
+            "recipe": {
+              "methods": [
+                "tensor_decomposition"
+              ],
+              "svd_energy": 0.9,
+              "include": [
+                "model.layers.23.mlp.down_proj"
+              ]
+            }
           }
-        }
+        ]
       },
       "benchmark": {
         "input_shape": [
           1,
           64
         ],
-        "output_tokens": 16,
-        "warmup": 1,
-        "iterations": 3,
+        "output_tokens": 32,
+        "warmup": 3,
+        "iterations": 10,
         "threads": 2
+      },
+      "generation": {
+        "prompt": "The history of data compression shows that",
+        "max_new_tokens": 24,
+        "max_prompt_tokens": 64
       }
     }
   }

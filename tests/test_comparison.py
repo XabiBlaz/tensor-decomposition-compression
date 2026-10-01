@@ -99,6 +99,7 @@ class ComparisonTests(unittest.TestCase):
 
     def test_language_and_cuda_require_corresponding_measurements(self):
         self.benchmark["task"] = "causal_lm"
+        self.benchmark["workload_id"] = "fixed-prompt"
         self.assertEqual(self.report()["status"], "measurement_failed")
         self.benchmark["output_tokens_per_second"] = 10.0
         self.assertEqual(self.report()["status"], "verified")

@@ -49,6 +49,18 @@ def evaluate_language(model, batches, *, device="cpu"):
             "tokens": tokens, "sequences": sequences}
 
 
+def split_token_counts(batches, identifiers):
+    """Return auditable valid next-token counts in example-ID order."""
+    counts = []
+    for batch in batches:
+        _, valid = shifted_targets(batch)
+        counts.extend(int(value) for value in valid.sum(dim=1).tolist())
+    if len(counts) != len(identifiers):
+        raise ValueError("Tokenized language examples do not match their recorded IDs.")
+    return [{"id": identifier, "valid_tokens": count}
+            for identifier, count in zip(identifiers, counts)]
+
+
 @torch.no_grad()
 def teacher_kl(original, candidate, batches, *, device="cpu", token_chunk=32, temperature=1.0):
     if temperature <= 0 or token_chunk < 1:
@@ -114,9 +126,16 @@ def text_records(config):
         # canonical partitions here. Use explicit IDs in text_json for subsets.
         if any(not re.fullmatch(r"[A-Za-z0-9_]+", splits[role]) for role in roles):
             raise ValueError("Use canonical dataset splits or text_json with explicit IDs.")
-        count = data.get("samples", 16)
-        if count < 1:
-            raise ValueError("samples must be positive.")
+        samples = data.get("samples", 16)
+        if isinstance(samples, dict):
+            if set(samples) - set(roles):
+                raise ValueError("Language sample counts may name only configured data roles.")
+            counts = {role: samples.get(role) for role in roles}
+        else:
+            counts = {role: samples for role in roles}
+        if any(isinstance(count, bool) or not isinstance(count, int) or count < 1
+               for count in counts.values()):
+            raise ValueError("Every language sample count must be a positive integer.")
         records = {}
         for role in roles:
             split = splits[role]
@@ -124,7 +143,7 @@ def text_records(config):
             column = data.get("text_column", "text")
             candidates = ((index, row[column]) for index, row in enumerate(dataset)
                           if len(row[column].strip()) >= data.get("minimum_characters", 80))
-            selected = heapq.nsmallest(count, candidates, key=lambda row: hashlib.sha256(
+            selected = heapq.nsmallest(counts[role], candidates, key=lambda row: hashlib.sha256(
                 f"{config.get('seed', 0)}:{split}:{row[0]}".encode()).hexdigest())
             records[role] = [{"id": f"{data['name']}@{data['revision']}:{split}:{index}", "text": text}
                              for index, text in selected]
@@ -152,3 +171,54 @@ def load_text_split(config, role):
     batches = list(text_batches(tokenizer, [item["text"] for item in records], max_length=data.get("max_length", 128),
                                 batch_size=data.get("batch_size", 1)))
     return batches, [item["id"] for item in records]
+
+
+@torch.no_grad()
+def verify_generation(model, tokenizer, prompt, *, device="cpu", max_new_tokens=16,
+                      max_prompt_tokens=64, rtol=1e-3, atol=1e-4):
+    """Generate text and compare one cached decode step with a full-prefix step."""
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("Generation verification needs a nonempty prompt.")
+    if not isinstance(max_new_tokens, int) or max_new_tokens < 1:
+        raise ValueError("max_new_tokens must be a positive integer.")
+    encoded = tokenizer(prompt, return_tensors="pt", truncation=True,
+                        max_length=max_prompt_tokens)
+    inputs = {name: value.to(device) for name, value in encoded.items()
+              if name in {"input_ids", "attention_mask"}}
+    if "attention_mask" not in inputs:
+        inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
+    with evaluation_mode(model), torch.inference_mode():
+        first = model(**inputs, use_cache=True)
+        cache = first.past_key_values
+        if cache is None:
+            raise ValueError("The reloaded language model did not return an attention cache.")
+        next_token = first.logits[:, -1:].argmax(-1)
+        extended_ids = torch.cat((inputs["input_ids"], next_token), dim=1)
+        extended_mask = torch.cat((inputs["attention_mask"], torch.ones_like(next_token)), dim=1)
+        cached = model(input_ids=next_token, attention_mask=extended_mask,
+                       past_key_values=cache, use_cache=True)
+        uncached = model(input_ids=extended_ids, attention_mask=extended_mask, use_cache=False)
+        cached_logits = cached.logits[:, -1].float()
+        uncached_logits = uncached.logits[:, -1].float()
+        maximum_error = (cached_logits - uncached_logits).abs().max().item()
+        cache_matches = torch.allclose(cached_logits, uncached_logits, rtol=rtol, atol=atol)
+        if not cache_matches:
+            raise ValueError(
+                f"Attention-cache logits differ from full-prefix logits (max error {maximum_error:.6g}).")
+        generated = model.generate(**inputs, max_new_tokens=max_new_tokens,
+                                   do_sample=False, use_cache=True,
+                                   pad_token_id=(tokenizer.pad_token_id if tokenizer.pad_token_id is not None
+                                                 else tokenizer.eos_token_id))
+    cached_length = None
+    if hasattr(cached.past_key_values, "get_seq_length"):
+        cached_length = int(cached.past_key_values.get_seq_length())
+    return {
+        "status": "verified", "prompt": prompt,
+        "generated_text": tokenizer.decode(generated[0], skip_special_tokens=True),
+        "prompt_tokens": int(inputs["input_ids"].numel()),
+        "generated_tokens": int(generated.shape[1] - inputs["input_ids"].shape[1]),
+        "attention_cache": {"returned": True, "step_matches_full_prefix": True,
+                            "maximum_logit_error": maximum_error,
+                            "rtol": rtol, "atol": atol,
+                            "sequence_length_after_step": cached_length},
+    }

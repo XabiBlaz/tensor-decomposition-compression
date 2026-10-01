@@ -187,6 +187,89 @@ class UIJobsTests(unittest.TestCase):
         self.assertEqual(environments[0]["HF_DATASETS_OFFLINE"], "0")
         self.assertEqual(environments[0]["TN_ALLOW_HF_DOWNLOAD"], "1")
 
+    def test_language_study_selects_on_validation_before_test(self):
+        config = next(preset["config"] for preset in read_json(PRESETS) if preset["id"] == "language")
+        events = []
+
+        def runner(argv, **kwargs):
+            command = argv[3]
+            output = Path(argv[argv.index("--output-dir") + 1])
+            role = argv[argv.index("--role") + 1] if "--role" in argv else None
+            events.append((command, role, str(output)))
+            output.mkdir(parents=True, exist_ok=True)
+            if command == "snapshot":
+                bundle = output / "bundle"; bundle.mkdir()
+                (bundle / "manifest.json").write_text("{}")
+                (bundle / "weights.pt").write_bytes(b"dense")
+                (output / "snapshot.json").write_text("{}")
+            elif command == "layers":
+                (output / "layers.json").write_text(json.dumps({"status": "inspected"}))
+            elif command == "compress":
+                bundle = output / "bundle"; bundle.mkdir()
+                (bundle / "manifest.json").write_text("{}")
+                (bundle / "weights.pt").write_bytes(b"small")
+                identifier = output.parts[-2]
+                (output / "compress.json").write_text(json.dumps({
+                    "applied_methods": ["quantization" if identifier == "int8" else "tensor_decomposition"],
+                    "compressed_tensor_bytes": 80,
+                }))
+                (output / "compression_plan.json").write_text(json.dumps({
+                    "status": "feasible", "transformations": [{"method": "test"}],
+                    "constraints": {"quality_metric": "nll", "quality_direction": "lower",
+                                    "quality_units": "nats/token", "max_quality_loss": 0.1,
+                                    "target_size_bytes": 100},
+                }))
+            elif command == "evaluate":
+                nll = 2.0
+                if "trials" in output.parts:
+                    identifier = output.parts[-2]
+                    nll = {"int8": 1.9, "svd-final-down-92": 2.1,
+                           "svd-final-down-90": 2.2}[identifier]
+                elif output.name == "compressed-evaluation":
+                    nll = 2.01
+                value = {"task": "causal_lm", "role": role, "nll": nll,
+                         "perplexity": 7.0, "tokens": 10, "sequences": 2,
+                         "example_ids": [f"{role}:0", f"{role}:1"],
+                         "example_valid_tokens": [{"id": f"{role}:0", "valid_tokens": 5},
+                                                  {"id": f"{role}:1", "valid_tokens": 5}]}
+                (output / "evaluate.json").write_text(json.dumps(value))
+            elif command == "benchmark":
+                value = {"status": "ok", "runtime": "pytorch", "device": "cpu",
+                         "task": "causal_lm", "input_shape": [1, 4], "iterations": 2,
+                         "warmup": 1, "threads": 1, "seed": 0, "output_tokens": 2,
+                         "timing_scope": "fixed-length greedy generation including Python loop",
+                         "workload_id": "validation:0", "load_seconds": 0.1,
+                         "latency_mean_ms": 2, "latency_p50_ms": 2, "latency_p95_ms": 2,
+                         "rss_load_peak_bytes": 100, "rss_inference_peak_bytes": 100,
+                         "tensor_bytes": 80 if output.name == "compressed-benchmark" else 90,
+                         "parameters": 10, "output_tokens_per_second": 100}
+                (output / "benchmark.json").write_text(json.dumps(value))
+            elif command == "generate":
+                (output / "generate.json").write_text(json.dumps({"status": "verified"}))
+            elif command == "export-language-onnx":
+                (output / "model-fixed-logits.onnx").write_bytes(b"verified graph")
+                (output / "export-language-onnx.json").write_text(json.dumps({
+                    "status": "verified_fixed_shape_logits_only", "serving_ready": False,
+                }))
+            return subprocess.CompletedProcess(argv, 0)
+
+        manager = self.manager(runner)
+        job = manager.submit({"config": config, "mode": "compress", "device": "cpu"})
+        manager.pool.shutdown(wait=True)
+        result = manager.get(job["id"])
+        self.assertEqual(result["status"], "completed", result.get("error"))
+        self.assertEqual(result["results"]["study"]["selected_trial"], "int8")
+        first_test = next(index for index, event in enumerate(events)
+                          if event[0] == "evaluate" and event[1] == "test")
+        self.assertTrue(all(event[1] != "test" for event in events[:first_test]))
+        self.assertEqual(sum(event[0] == "evaluate" and event[1] == "test" for event in events), 2)
+        self.assertTrue(any(item["name"] == "selected-pytorch-bundle.tar"
+                            for item in result["artifacts"]))
+        self.assertTrue(any(item["name"] == "language-fixed-logits-onnx.tar"
+                            for item in result["artifacts"]))
+        self.assertFalse(any(item["name"].endswith("model-fixed-logits.onnx")
+                             for item in result["artifacts"]))
+
 
 if __name__ == "__main__":
     unittest.main()

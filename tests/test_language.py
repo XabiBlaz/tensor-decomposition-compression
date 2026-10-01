@@ -8,7 +8,8 @@ pytest.importorskip("transformers")
 from tn_compression.api import apply_compression_plan, build_plan
 from tn_compression.checkpoints import load_bundle, save_bundle
 from tn_compression.models import load_model
-from tn_compression.tasks.language import evaluate_language, shifted_targets, teacher_kl, text_records
+from tn_compression.tasks.language import (evaluate_language, shifted_targets, split_token_counts,
+                                           teacher_kl, text_records, verify_generation)
 
 
 def tiny_model():
@@ -60,6 +61,26 @@ def test_loss_aggregation_uses_tokens_not_batch_means():
     data["attention_mask"].zero_()
     with pytest.raises(ValueError, match="no valid"):
         evaluate_language(model, [data])
+
+
+def test_generation_verifies_reloaded_cache_step():
+    class Tokenizer:
+        pad_token_id = 0
+        eos_token_id = 1
+
+        def __call__(self, text, **kwargs):
+            return {"input_ids": torch.tensor([[2, 3, 4]]),
+                    "attention_mask": torch.ones(1, 3, dtype=torch.long)}
+
+        def decode(self, tokens, **kwargs):
+            return " ".join(str(int(token)) for token in tokens)
+
+    result = verify_generation(tiny_model(), Tokenizer(), "fixed prompt", max_new_tokens=2)
+    assert result["status"] == "verified"
+    assert result["generated_tokens"] == 2
+    assert result["attention_cache"]["step_matches_full_prefix"] is True
+    provenance = split_token_counts([batch()], ["a", "b"])
+    assert provenance == [{"id": "a", "valid_tokens": 3}, {"id": "b", "valid_tokens": 1}]
 
 
 @pytest.mark.parametrize("duplicate", ["id", "text"])

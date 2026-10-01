@@ -74,6 +74,8 @@ def build_comparison(original_evaluation, compressed_evaluation, original_benchm
         reasons.append("Final artifact quality constraint failed or could not be verified.")
     benchmarks_ok = all(_benchmark_evidence(item) for item in (original_benchmark, compressed_benchmark))
     workload_keys = ("runtime", "device", "task", "input_shape", "iterations", "warmup", "threads", "seed", "output_tokens", "timing_scope")
+    if original_benchmark.get("task") == "causal_lm" or compressed_benchmark.get("task") == "causal_lm":
+        workload_keys += ("workload_id",)
     same_workload = all(key in original_benchmark and key in compressed_benchmark
                         and original_benchmark[key] == compressed_benchmark[key] for key in workload_keys)
     if not benchmarks_ok or not same_workload:

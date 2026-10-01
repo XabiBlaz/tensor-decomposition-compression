@@ -43,6 +43,7 @@
   function configError(message) { state.valid = !message; $("config-error").textContent = message || ""; show("config-error", Boolean(message)); $("config").setAttribute("aria-invalid", String(Boolean(message))); updateSubmit(); }
   const mode = () => document.querySelector('input[name="mode"]:checked').value;
   const isLanguage = () => state.config?.task === "causal_lm";
+  const isLanguageStudy = () => isLanguage() && Boolean(state.config?.language_study);
   function updateSubmit() {
     const config = state.config, kind = config.data?.kind, language = isLanguage();
     const missing = !state.valid ? "Fix the Advanced configuration JSON before starting." :
@@ -52,9 +53,9 @@
       !language && (kind !== "synthetic" || $("preset").value === "trained-synthetic") && !config.model.state_dict_path && !$("checkpoint").value.trim() ? "Upload trained weights, or enter an existing model bundle." :
       !language && ["image_folder", "oxford_pet"].includes(kind) && !$("data-root").value.trim() ? "Enter the dataset folder under /data." :
       language && (!$("tokenizer-name").value.trim() || !/^[0-9a-f]{40}$/.test($("model-revision").value) || !/^[0-9a-f]{40}$/.test($("tokenizer-revision").value)) ? "Enter a tokenizer and full 40-character model and tokenizer versions." :
-      mode() === "compress" && !["method-tensor", "method-quantization", "method-pruning"].some((id) => $(id).checked) ? "Choose at least one compression method." : "";
+      mode() === "compress" && !isLanguageStudy() && !["method-tensor", "method-quantization", "method-pruning"].some((id) => $(id).checked) ? "Choose at least one compression method." : "";
     $("submit").disabled = state.pending || state.uploading || !state.valid || Boolean(missing);
-    $("submit").firstChild.textContent = state.pending ? "Starting run… " : state.uploading ? "Uploading weights… " : mode() === "compress" ? "Compress & compare " : "Inspect layers ";
+    $("submit").firstChild.textContent = state.pending ? "Starting run… " : state.uploading ? "Uploading weights… " : mode() === "compress" && isLanguageStudy() ? "Run fixed study " : mode() === "compress" ? "Compress & compare " : "Inspect layers ";
     $("readiness").textContent = missing || (isDemo(config) ? "Ready for a synthetic workflow demo. Its quality numbers do not describe a trained model." : language ? $("allow-download").checked ? "Ready to start. Missing pinned Hugging Face files may be downloaded." : "Ready to start if the pinned Hugging Face files are cached. Otherwise, enable downloads." : "Ready to run. Quality will be checked on your selected data.");
     $("readiness").classList.toggle("warning", Boolean(missing) || isDemo(config));
     $("run-summary").textContent = `${mode() === "compress" ? "Compress and compare" : "Inspect layers in"} ${config.model?.name || "your model"} · ${taskNames[config.task] || "Choose a task"} · ${$("device").value.toUpperCase()}`;
@@ -95,11 +96,12 @@
     metricHelp();
   }
   function updateModeFields() {
-    show("recipe-fields", mode() === "compress");
+    show("recipe-fields", mode() === "compress" && !isLanguageStudy());
+    show("language-study-fields", mode() === "compress" && isLanguageStudy());
     show("goal-fields", mode() === "compress");
     show("analyze-explainer", mode() === "analyze");
     show("download-option", isLanguage());
-    $("options-title").textContent = mode() === "compress" ? "Choose compression methods" : "Inspect layer importance";
+    $("options-title").textContent = mode() === "compress" && isLanguageStudy() ? "Run the bounded comparison" : mode() === "compress" ? "Choose compression methods" : "Inspect layer importance";
     $("quality").required = mode() === "compress";
     const pruningSupported = isLanguage() && /(?:llama|qwen)/i.test(state.config.model?.name || "");
     $("method-pruning").disabled = !pruningSupported;
@@ -142,7 +144,7 @@
     state.config.analysis = { ...state.config.analysis, quality_metric: $("metric").value };
     if ($("target").value !== "") state.config.analysis.target_size_mb = Number($("target").value); else delete state.config.analysis.target_size_mb;
     if ($("quality").value !== "") state.config.analysis.max_quality_loss = Number($("quality").value); else delete state.config.analysis.max_quality_loss;
-    if (mode() === "compress") {
+    if (mode() === "compress" && !isLanguageStudy()) {
       const methods = [["method-tensor", "tensor_decomposition"], ["method-quantization", "quantization"], ["method-pruning", "pruning"]].filter(([id]) => $(id).checked).map(([, name]) => name);
       const recipe = { ...state.config.recipe, methods, svd_energy: Number($("svd-energy").value), pruning_retention: Number($("pruning-retention").value), quantization_bits: 8 };
       if (!("include" in recipe) && Array.isArray(state.config.analysis.include) && state.config.analysis.include.length) recipe.include = [...state.config.analysis.include];
@@ -159,7 +161,7 @@
     $("checkpoint").value = preset.checkpoint || state.config.model?.checkpoint || "";
     $("checkpoint-details").open = Boolean($("checkpoint").value);
     syncFields();
-    if (mode() === "compress" && !state.config.recipe?.methods?.length) {
+    if (mode() === "compress" && !isLanguageStudy() && !state.config.recipe?.methods?.length) {
       $("method-tensor").checked = true;
       if (isLanguage()) $("target").value = "";
     }
@@ -240,6 +242,24 @@
     $("direct-summary").textContent = `${mib(direct.original_tensor_bytes)} original → ${mib(direct.compressed_tensor_bytes)} after compression. The final quality and runtime measurements appear below when verification completes.`;
     $("direct-stages").replaceChildren(...(direct.applied_methods || []).map((method) => element("span", humanize(method), "method-tag")));
   }
+  function renderStudy(study) {
+    show("study-panel", Boolean(study));
+    if (!study) return;
+    $("study-selection").textContent = study.selected_trial ? `Selected: ${study.selected_trial}` : "Selection pending";
+    const baseline = study.baseline_validation;
+    const rows = [];
+    if (baseline) rows.push({ label: "Uncompressed baseline", status: "baseline", nll: baseline.nll, perplexity: baseline.perplexity });
+    rows.push(...(study.trials || []));
+    $("study-body").replaceChildren(...rows.map((trial) => {
+      const row = element("tr");
+      row.append(element("td", trial.label || trial.id), element("td", humanize(trial.status)),
+        element("td", format(trial.nll)), element("td", format(trial.perplexity)),
+        element("td", mib(trial.compressed_tensor_bytes)));
+      return row;
+    }));
+    if (!rows.length) emptyRow("study-body", 5, "Trial results are not available yet.");
+    $("study-note").textContent = study.selection_rule || "Candidates are selected on validation NLL before held-out test evaluation.";
+  }
   function renderRecovered(recovered, comparison, quality) {
     show("recovered-panel", Boolean(recovered || comparison || quality));
     if (!recovered && !comparison && !quality) return;
@@ -253,9 +273,9 @@
     if (!$("recovered-body").children.length) emptyRow("recovered-body", 2, "No recovered metrics available.");
   }
   function renderResults(job) {
-    const analysis = job.results?.analysis, comparison = job.results?.comparison, relevance = job.results?.relevance;
+    const analysis = job.results?.analysis, comparison = job.results?.comparison, relevance = job.results?.relevance, study = job.results?.study;
     const direct = Array.isArray(job.results?.direct?.applied_methods) ? job.results.direct : null;
-    show("results", Boolean(analysis || comparison || relevance || direct)); if (!analysis && !comparison && !relevance && !direct) return;
+    show("results", Boolean(analysis || comparison || relevance || direct || study)); if (!analysis && !comparison && !relevance && !direct && !study) return;
     const verdict = $("result-verdict");
     show("result-verdict", Boolean(comparison || relevance));
     if (comparison) {
@@ -268,7 +288,7 @@
       verdict.textContent = "Layer importance is ready below. This analysis did not compress the model.";
       verdict.className = "notice verdict";
     }
-    renderRelevance(relevance); renderDirect(direct); renderRecovered(job.results?.recovered, job.results?.recovered_comparison, job.results?.recovery_quality);
+    renderRelevance(relevance); renderDirect(direct); renderStudy(study); renderRecovered(job.results?.recovered, job.results?.recovered_comparison, job.results?.recovery_quality);
     show("result-cards", Boolean(analysis || comparison || direct));
     show("metrics-panel", Boolean(analysis || comparison));
     const summary = analysis?.summary || {}, original = summary.original_tensor_bytes, compressed = summary.estimated_final_tensor_bytes;
@@ -349,7 +369,7 @@
   ["method-tensor", "method-quantization", "method-pruning"].forEach((id) => $(id).addEventListener("change", guidedChange));
   $("config").addEventListener("input", readConfig);
   document.querySelectorAll('input[name="mode"]').forEach((input) => input.addEventListener("change", () => {
-    if (mode() === "compress" && !state.config.recipe?.methods?.length) {
+    if (mode() === "compress" && !isLanguageStudy() && !state.config.recipe?.methods?.length) {
       $("method-tensor").checked = true;
       if (isLanguage() && $("preset").value === "language" && !state.targetEdited) $("target").value = "";
     }
@@ -390,7 +410,7 @@
       const commit = (value) => /^[0-9a-f]{40}$/.test(value);
       if ((remote(state.config.model.name) && !commit(state.config.model.revision)) || (remote(state.config.tokenizer?.name) && !commit(state.config.tokenizer?.revision))) { error("Pin both model and tokenizer to full 40-character commit revisions."); return; }
     }
-    if (mode() === "compress" && !state.config.recipe?.methods?.length) { error("Select at least one compression method."); return; }
+    if (mode() === "compress" && !isLanguageStudy() && !state.config.recipe?.methods?.length) { error("Select at least one compression method."); return; }
     if (state.config.recipe?.methods?.includes("pruning") && (mode() === "compress") && $("method-pruning").disabled) { error("Physical pruning requires a supported Llama/Qwen gated MLP model."); return; }
     state.pending = true; updateSubmit(); error("");
     try { const job = await api("/api/jobs", { method: "POST", body: JSON.stringify({ preset: $("preset").value, config: state.config, checkpoint: $("checkpoint").value.trim() || null, device: $("device").value, mode: mode(), allow_download: $("allow-download").checked, recovery: mode() === "compress" ? $("recovery").value : "none" }) }); await selectJob(job.id); await refreshJobs(); }

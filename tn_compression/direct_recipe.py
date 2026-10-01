@@ -4,7 +4,9 @@ import math
 
 
 def _tensor_bytes(model):
-    return sum(value.numel() * value.element_size() for value in model.state_dict().values())
+    tensors = list(model.parameters()) + list(model.buffers())
+    return sum(value.numel() * value.element_size()
+               for value in {id(value): value for value in tensors}.values())
 
 
 def validate_recipe(recipe, task):

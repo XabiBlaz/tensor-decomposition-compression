@@ -16,11 +16,13 @@ from pathlib import Path
 
 
 def benchmark_bundle(path, *, input_shape=(1, 3, 256, 256), device="cpu", task="segmentation",
-                     warmup=20, iterations=100, threads=1, timeout=600, seed=0, output_tokens=32):
+                     warmup=20, iterations=100, threads=1, timeout=600, seed=0, output_tokens=32,
+                     input_ids=None, workload_id=None):
     command = [sys.executable, "-m", "tn_compression.benchmark", str(Path(path).resolve()),
                json.dumps({"input_shape": input_shape, "device": device, "task": task,
                            "warmup": warmup, "iterations": iterations, "threads": threads, "seed": seed,
-                           "output_tokens": output_tokens})]
+                           "output_tokens": output_tokens, "input_ids": input_ids,
+                           "workload_id": workload_id})]
     environment = {**os.environ, "OMP_NUM_THREADS": str(threads), "MKL_NUM_THREADS": str(threads),
                    "OPENBLAS_NUM_THREADS": str(threads)}
     try:
@@ -97,7 +99,17 @@ def _worker(path, options):
                 raise ValueError("Language timing requires input_shape=[1, prompt_length].")
             if options["output_tokens"] < 1:
                 raise ValueError("output_tokens must be positive.")
-            inputs = torch.randint(model.config.vocab_size, options["input_shape"], device=device)
+            token_ids = options.get("input_ids")
+            if token_ids is None:
+                inputs = torch.randint(model.config.vocab_size, options["input_shape"], device=device)
+                options["workload_id"] = options.get("workload_id") or "seeded_synthetic_token_ids"
+            else:
+                if (not isinstance(token_ids, list) or not token_ids
+                        or any(isinstance(value, bool) or not isinstance(value, int)
+                               or value < 0 or value >= model.config.vocab_size for value in token_ids)):
+                    raise ValueError("Language benchmark input_ids must be valid vocabulary token integers.")
+                inputs = torch.tensor([token_ids], device=device, dtype=torch.long)
+                options["input_shape"] = list(inputs.shape)
         else:
             inputs = torch.randn(options["input_shape"], device=device, dtype=next(model.parameters()).dtype)
         if options["task"] == "detection":
@@ -138,11 +150,15 @@ def _worker(path, options):
     }
     if device.startswith("cuda"):
         result.update(gpu=torch.cuda.get_device_name(device),
+                      cuda_version=str(torch.version.cuda),
                       cuda_allocated_peak_bytes=torch.cuda.max_memory_allocated(device),
                       cuda_reserved_peak_bytes=torch.cuda.max_memory_reserved(device))
     if language:
+        workload = ("seeded synthetic token IDs; batch=1; EOS ignored; no request queue"
+                    if options.get("input_ids") is None else
+                    "fixed recorded token IDs; batch=1; EOS ignored; no request queue")
         result.update(timing_scope="fixed-length greedy generation including Python loop",
-                      workload="seeded synthetic token IDs; batch=1; EOS ignored; no request queue",
+                      workload=workload,
                       requests=requests, output_tokens_per_second=options["output_tokens"] * len(latencies) / (sum(latencies) / 1000),
                       kv_cache_peak_bytes=None)
     return result

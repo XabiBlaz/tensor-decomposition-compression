@@ -19,3 +19,5 @@ def test_isolated_generation_records_actual_steps(tmp_path):
     assert len(result["requests"]) == 2
     assert all(len(row["inter_token_ms"]) == 2 and row["output_tokens"] == 3 for row in result["requests"])
     assert result["output_tokens_per_second"] > 0
+    assert result["workload_id"] == "seeded_synthetic_token_ids"
+    assert result["workload"].startswith("seeded synthetic")

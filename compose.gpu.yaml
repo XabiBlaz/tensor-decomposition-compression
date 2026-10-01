@@ -1,0 +1,12 @@
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: containers/ui-gpu.Dockerfile
+    runtime: nvidia
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      # Required by this machine's legacy 460 driver. CUDA 11 minor-version
+      # compatibility was verified with an actual PyTorch CUDA matrix multiply.
+      NVIDIA_DISABLE_REQUIRE: "1"

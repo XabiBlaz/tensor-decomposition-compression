@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import tarfile
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -129,9 +130,27 @@ def validate_request(payload, data_root, upload_root=None):
     if recipe is not None and mode == "compress":
         from ..direct_recipe import validate_recipe
         validate_recipe(recipe, task)
+    study = config.get("language_study")
+    if study is not None:
+        if task != "causal_lm" or not isinstance(study, dict):
+            raise ValueError("A language study requires a causal_lm configuration.")
+    if study is not None and mode == "compress":
+        trials = study.get("trials")
+        if not isinstance(trials, list) or not 2 <= len(trials) <= 6:
+            raise ValueError("A language study needs between two and six bounded trials.")
+        identifiers = [trial.get("id") for trial in trials if isinstance(trial, dict)]
+        if (len(identifiers) != len(trials) or len(set(identifiers)) != len(identifiers)
+                or any(not isinstance(value, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", value)
+                       for value in identifiers)):
+            raise ValueError("Language study trial IDs must be unique lowercase file-safe names.")
+        from ..direct_recipe import validate_recipe
+        for trial in trials:
+            methods = validate_recipe(trial.get("recipe"), task)
+            if len(methods) != 1 or methods[0] not in {"quantization", "tensor_decomposition"}:
+                raise ValueError("Language study trials must test int8 or SVD individually.")
     for key in (() if mode == "analyze" else ("target_size_mb", "max_quality_loss")):
         value = analysis.get(key)
-        if key == "target_size_mb" and value is None and recipe is not None:
+        if key == "target_size_mb" and value is None and (recipe is not None or study is not None):
             continue
         if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value):
             raise ValueError(f"analysis.{key} must be a finite number.")
@@ -280,7 +299,9 @@ class JobManager:
             job["logs"] = ""
         job["results"] = {}
         for key, path in {"analysis": "analysis/analyze.json", "relevance": "relevance/relevance.json",
+                          "inspection": "inspection/layers.json", "study": "study/study.json",
                           "direct": "compressed/compress.json", "comparison": "comparison/comparison.json",
+                          "generation": "generation/generate.json",
                           "recovered": "recovered-evaluation/evaluate.json",
                           "lora": "lora/lora_recovery.json",
                           "recovered_comparison": "recovered-comparison/comparison.json",
@@ -296,7 +317,8 @@ class JobManager:
              "url": f"/api/jobs/{identifier}/artifacts/{path.relative_to(directory).as_posix()}"}
             for path in sorted(directory.rglob("*"))
             if path.is_file() and path.resolve().is_relative_to(directory)
-            and path.suffix in {".json", ".html", ".txt", ".pt", ".safetensors"}
+            and path.suffix in {".json", ".html", ".md", ".txt", ".pt", ".safetensors", ".onnx", ".tar"}
+            and not (path.suffix == ".onnx" and "language-onnx" in path.parts)
             and path.name != "job.json"
         ]
         return job
@@ -312,12 +334,13 @@ class JobManager:
         self.pool.submit(self._execute, job)
         return job
 
-    def _stage(self, job, label, command, output_name, *, checkpoint=None, extra=()):
+    def _stage(self, job, label, command, output_name, *, checkpoint=None, extra=(), config_path=None,
+               timeout=None):
         directory = self._directory(job["id"])
         job.update(status="running", stage=label)
         self._save(job)
         argv = [sys.executable, "-m", "tn_compression", command,
-                "--config", str(directory / "config.json"), "--output-dir", str(directory / output_name),
+                "--config", str(config_path or directory / "config.json"), "--output-dir", str(directory / output_name),
                 "--device", job["device"]]
         if checkpoint:
             argv += ["--checkpoint", str(checkpoint)]
@@ -332,9 +355,114 @@ class JobManager:
         with (directory / "run.log").open("ab", buffering=0) as log:
             log.write(f"\n--- {label} ---\n".encode())
             result = self.command_runner(argv, stdout=log, stderr=subprocess.STDOUT,
-                                         env=env, timeout=self.timeout, check=False)
+                                         env=env, timeout=timeout or self.timeout, check=False)
         if result.returncode:
             raise RuntimeError(f"{label} failed (exit {result.returncode}). See the run log for details.")
+
+    def _language_study(self, job, config, original):
+        """Run validation-only trials, then touch held-out test once for the winner."""
+        directory = self._directory(job["id"])
+        self._stage(job, "Inspecting supported language layers", "layers", "inspection", checkpoint=original)
+        self._stage(job, "Recording the disjoint calibration split", "evaluate", "original-calibration",
+                    checkpoint=original, extra=("--role", "calibration"))
+        self._stage(job, "Evaluating uncompressed validation baseline", "evaluate", "original-validation",
+                    checkpoint=original, extra=("--role", "validation"))
+        baseline = read_json(directory / "original-validation" / "evaluate.json")
+        trials = []
+        trial_root = directory / "trial-configs"
+        trial_root.mkdir()
+        for trial in config["language_study"]["trials"]:
+            identifier = trial["id"]
+            trial_config = copy.deepcopy(config)
+            trial_config["recipe"] = trial["recipe"]
+            trial_config.pop("language_study", None)
+            config_path = trial_root / f"{identifier}.json"
+            config_path.write_text(json.dumps(trial_config, indent=2) + "\n", encoding="utf-8")
+            root = f"trials/{identifier}"
+            try:
+                self._stage(job, f"Applying {trial.get('label', identifier)}", "compress",
+                            f"{root}/compressed", checkpoint=original, config_path=config_path)
+                bundle = directory / root / "compressed" / "bundle"
+                self._stage(job, f"Validating reloaded {trial.get('label', identifier)}", "evaluate",
+                            f"{root}/validation", checkpoint=bundle,
+                            extra=("--role", "validation"), config_path=config_path)
+                direct = read_json(directory / root / "compressed" / "compress.json")
+                measured = read_json(directory / root / "validation" / "evaluate.json")
+                if measured.get("example_ids") != baseline.get("example_ids"):
+                    raise ValueError("Validation example IDs changed between the baseline and trial.")
+                if (not isinstance(measured.get("nll"), (int, float))
+                        or not math.isfinite(measured["nll"])):
+                    raise ValueError("Validation NLL is missing or nonfinite.")
+                from ..comparison import bundle_bytes
+                trials.append({"id": identifier, "label": trial.get("label", identifier), "status": "ok",
+                               "recipe": trial["recipe"], "nll": measured["nll"],
+                               "perplexity": measured["perplexity"], "tokens": measured["tokens"],
+                               "example_ids": measured["example_ids"],
+                               "example_valid_tokens": measured.get("example_valid_tokens", []),
+                               "applied_methods": direct["applied_methods"],
+                               "compressed_tensor_bytes": direct["compressed_tensor_bytes"],
+                               "serialized_bundle_bytes": bundle_bytes(bundle),
+                               "bundle": str(bundle.relative_to(directory))})
+            except Exception as error:
+                trials.append({"id": identifier, "label": trial.get("label", identifier),
+                               "status": "failed", "recipe": trial["recipe"], "error": str(error)})
+        successful = [trial for trial in trials if trial["status"] == "ok"]
+        if not successful:
+            raise RuntimeError("Every language compression trial failed. Review each trial and the run log.")
+        selected = min(successful, key=lambda trial: (trial["nll"], trial["id"]))
+        selected_bundle = directory / selected["bundle"]
+        study = {"schema_version": 1, "selection_metric": "validation_nll",
+                 "selection_rule": "lowest finite validation NLL; test metrics were not evaluated during trial selection",
+                 "calibration_provenance": read_json(directory / "original-calibration" / "evaluate.json"),
+                 "baseline_validation": baseline, "trials": trials, "selected_trial": selected["id"],
+                 "failed_trials": sum(trial["status"] != "ok" for trial in trials)}
+        study_dir = directory / "study"
+        study_dir.mkdir()
+        (study_dir / "study.json").write_text(json.dumps(study, indent=2) + "\n", encoding="utf-8")
+        self._stage(job, "Evaluating uncompressed held-out test baseline", "evaluate", "original-evaluation",
+                    checkpoint=original, extra=("--role", "test"))
+        self._stage(job, "Evaluating selected reloaded artifact on held-out test", "evaluate",
+                    "compressed-evaluation", checkpoint=selected_bundle, extra=("--role", "test"))
+        self._stage(job, "Benchmarking uncompressed model", "benchmark", "original-benchmark",
+                    checkpoint=original)
+        self._stage(job, "Benchmarking selected reloaded artifact", "benchmark", "compressed-benchmark",
+                    checkpoint=selected_bundle)
+        self._stage(job, "Verifying generation and attention cache", "generate", "generation",
+                    checkpoint=selected_bundle)
+        onnx_dir = directory / "language-onnx"
+        try:
+            self._stage(job, "Time-boxed fixed-logits ONNX investigation", "export-language-onnx",
+                        "language-onnx", checkpoint=selected_bundle,
+                        extra=("--role", "validation"), timeout=900)
+            with tarfile.open(directory / "language-fixed-logits-onnx.tar", "w") as output:
+                for path in sorted(onnx_dir.iterdir()):
+                    output.add(path, arcname=path.name)
+        except Exception as error:
+            onnx_dir.mkdir(exist_ok=True)
+            (onnx_dir / "investigation.json").write_text(json.dumps({
+                "status": "not_verified", "serving_ready": False, "time_box_seconds": 900,
+                "error": str(error),
+                "limitation": "No ONNX artifact is published unless fixed-shape logits parity passes. "
+                              "Autoregressive cache export remains required for serving readiness."
+            }, indent=2) + "\n", encoding="utf-8")
+        plan = read_json(directory / "trials" / selected["id"] / "compressed" / "compression_plan.json")
+        from ..comparison import build_comparison, write_comparison
+        report = build_comparison(
+            read_json(directory / "original-evaluation" / "evaluate.json"),
+            read_json(directory / "compressed-evaluation" / "evaluate.json"),
+            read_json(directory / "original-benchmark" / "benchmark.json"),
+            read_json(directory / "compressed-benchmark" / "benchmark.json"), plan,
+            original_bundle=original, compressed_bundle=selected_bundle)
+        write_comparison(report, directory / "comparison")
+        archive = directory / "selected-pytorch-bundle.tar"
+        with tarfile.open(archive, "w") as output:
+            output.add(selected_bundle, arcname="bundle", recursive=True)
+        study.update(selected_test=read_json(directory / "compressed-evaluation" / "evaluate.json"),
+                     comparison_status=report["status"], selected_bundle_archive=archive.name)
+        (study_dir / "study.json").write_text(json.dumps(study, indent=2) + "\n", encoding="utf-8")
+        job.update(status="completed", stage="Language study complete", summary=report["status"])
+        if report["status"] != "verified":
+            job["error"] = "; ".join(report.get("reasons", [])) or "Selected artifact did not verify."
 
     def _execute(self, job):
         directory = self._directory(job["id"])
@@ -347,6 +475,9 @@ class JobManager:
                            summary="Gradient-based layer relevance is ready. These scores are diagnostic, not a compression quality guarantee.")
             else:
                 config = read_json(directory / "config.json")
+                if config.get("language_study"):
+                    self._language_study(job, config, original)
+                    return
                 if config.get("recipe"):
                     self._stage(job, "Applying selected compression methods", "compress", "compressed", checkpoint=original)
                     plan_path = directory / "compressed" / "compression_plan.json"
@@ -376,6 +507,9 @@ class JobManager:
                     original_bundle=original, compressed_bundle=compressed,
                     synthetic_baseline=read_json(directory / "config.json")["data"]["kind"] == "synthetic")
                 write_comparison(report, directory / "comparison")
+                if config["task"] == "segmentation":
+                    self._stage(job, "Exporting and verifying segmentation ONNX", "export", "export",
+                                checkpoint=compressed, extra=("--role", "validation"))
                 baseline_passed = report["status"] in {"verified", "synthetic_only"}
                 if not baseline_passed and not (report["status"] == "quality_failed" and job.get("recovery") != "none"):
                     job.update(status="failed", stage="Verification failed", summary=report["status"],

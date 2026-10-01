@@ -1,6 +1,7 @@
 """Small command handlers over the same public Python workflows."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -66,9 +67,10 @@ def compression_config(config, output):
 
 def evaluate(model, config, role, device):
     if config.get("task") == "causal_lm":
-        from .tasks.language import evaluate_language, load_text_split
+        from .tasks.language import evaluate_language, load_text_split, split_token_counts
         batches, identifiers = load_text_split(config, role)
-        return {**evaluate_language(model, batches, device=device), "example_ids": identifiers, "role": role}
+        return {**evaluate_language(model, batches, device=device), "example_ids": identifiers,
+                "example_valid_tokens": split_token_counts(batches, identifiers), "role": role}
     batches, identifiers = analysis_batches(config, role)
     if config.get("task") == "detection":
         from .tasks.detection import evaluate_detection
@@ -87,17 +89,29 @@ def run(args):
     output.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(config.get("seed", 0))
     device = str(resolve_device(args.device, config))
-    if config.get("task") == "causal_lm" and args.command not in {"benchmark"}:
+    if config.get("task") == "causal_lm":
         from .language_assets import preflight_language_assets
         preflight_language_assets(config, allow_download=bool(os.environ.get("TN_ALLOW_HF_DOWNLOAD") == "1"),
-                                  check_data=args.command not in {"snapshot", "inspect"},
+                                  check_data=args.command not in {"snapshot", "inspect", "layers"},
                                   check_model=not bool(args.checkpoint))
     if args.command == "benchmark":
         if not args.checkpoint:
             raise ValueError("benchmark requires --checkpoint.")
         from .benchmark import benchmark_bundle
+        options = dict(config.get("benchmark", {}))
+        if config.get("task") == "causal_lm" and "input_ids" not in options:
+            from .tasks.language import load_text_split
+            role = options.pop("role", "validation")
+            batches, identifiers = load_text_split(config, role)
+            requested_length = options.get("input_shape", [1, 64])[1]
+            mask = batches[0].get("attention_mask", torch.ones_like(batches[0]["input_ids"]))[0].bool()
+            tokens = batches[0]["input_ids"][0][mask][:requested_length].tolist()
+            if not tokens:
+                raise ValueError("The selected benchmark text produced no prompt tokens.")
+            options.update(input_ids=tokens, input_shape=[1, len(tokens)],
+                           workload_id=f"{identifiers[0]}:sha256:{hashlib.sha256(bytes(str(tokens), 'utf-8')).hexdigest()}")
         result = benchmark_bundle(args.checkpoint, device=device, task=config.get("task", "segmentation"),
-                                  **config.get("benchmark", {}))
+                                  **options)
     else:
         if args.checkpoint:
             model = load_bundle(args.checkpoint, device=device)[0]
@@ -127,6 +141,18 @@ def run(args):
             from .tasks.lora_recovery import load_lora_adapter
             recovered = load_lora_adapter(args.adapter, base_bundle_path=args.checkpoint, device=device)
             result = evaluate(recovered, config, args.role, device)
+        elif args.command == "generate":
+            if config["task"] != "causal_lm" or not args.checkpoint:
+                raise ValueError("Generation verification requires a reloaded causal-LM bundle.")
+            from transformers import AutoTokenizer
+            from .tasks.language import verify_generation
+            tokenizer_spec = config.get("tokenizer", config["model"])
+            tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_spec["name"], revision=tokenizer_spec.get("revision"), trust_remote_code=False)
+            generation = dict(config.get("generation", {}))
+            result = verify_generation(model, tokenizer,
+                                       generation.pop("prompt", "The history of compression begins"),
+                                       device=device, **generation)
         elif args.command == "relevance":
             from .relevance import analyze_relevance
             batches, identifiers = analysis_batches(config, "calibration")
@@ -135,6 +161,11 @@ def run(args):
                                        max_layers=config.get("relevance", {}).get("max_layers", 64),
                                        binary=config.get("binary", False))
             result["example_ids"] = identifiers
+        elif args.command == "layers":
+            if config["task"] != "causal_lm":
+                raise ValueError("Layer inventory currently describes causal language models.")
+            from .language_experiments import inspect_language_layers
+            result = inspect_language_layers(model, config.get("language_study", {}).get("trials", []))
         elif args.command == "analyze":
             from .analyzer.reporting import write_analysis_artifacts
             from .analyzer.service import analyze_model
@@ -284,6 +315,14 @@ def run(args):
             from .export import export_onnx
             inputs, _ = next(iter(vision_batches(config, args.role)))
             result = export_onnx(model, inputs.to(device), output / "model.onnx")
+        elif args.command == "export-language-onnx":
+            if config.get("task") != "causal_lm" or not args.checkpoint:
+                raise ValueError("Language ONNX export requires a reloaded causal-LM bundle.")
+            from .tasks.language import load_text_split
+            from .language_export import export_fixed_logits_onnx
+            batches, identifiers = load_text_split(config, args.role)
+            result = export_fixed_logits_onnx(model, output / "model-fixed-logits.onnx", batches[0], device=device)
+            result.update(example_id=identifiers[0])
         else:
             raise ValueError(f"Unknown command: {args.command}")
     result.setdefault("workflow", config)
@@ -295,7 +334,7 @@ def main(argv=None):
     import logging
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Inspect, compress and evaluate configurable PyTorch models.")
-    parser.add_argument("command", choices=["inspect", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "export", "benchmark"])
+    parser.add_argument("command", choices=["inspect", "layers", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "generate", "export", "export-language-onnx", "benchmark"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint")
     parser.add_argument("--output-dir", required=True)
