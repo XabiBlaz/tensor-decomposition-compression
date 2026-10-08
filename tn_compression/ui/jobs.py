@@ -301,6 +301,7 @@ class JobManager:
         for key, path in {"analysis": "analysis/analyze.json", "relevance": "relevance/relevance.json",
                           "inspection": "inspection/layers.json", "study": "study/study.json",
                           "direct": "compressed/compress.json", "comparison": "comparison/comparison.json",
+                          "export": "export/export.json", "export_investigation": "export/investigation.json",
                           "generation": "generation/generate.json",
                           "recovered": "recovered-evaluation/evaluate.json",
                           "lora": "lora/lora_recovery.json",
@@ -511,8 +512,17 @@ class JobManager:
                     synthetic_baseline=read_json(directory / "config.json")["data"]["kind"] == "synthetic")
                 write_comparison(report, directory / "comparison")
                 if config["task"] == "segmentation":
-                    self._stage(job, "Exporting and verifying segmentation ONNX", "export", "export",
-                                checkpoint=compressed, extra=("--role", "validation"))
+                    try:
+                        self._stage(job, "Exporting and verifying segmentation ONNX", "export", "export",
+                                    checkpoint=compressed, extra=("--role", "validation"))
+                    except Exception as error:
+                        export_dir = directory / "export"
+                        export_dir.mkdir(exist_ok=True)
+                        (export_dir / "model.onnx").unlink(missing_ok=True)
+                        (export_dir / "investigation.json").write_text(json.dumps({
+                            "status": "not_verified", "error": str(error),
+                            "limitation": "The PyTorch comparison remains available; no ONNX artifact was verified."
+                        }, indent=2) + "\n", encoding="utf-8")
                 baseline_passed = report["status"] in {"verified", "synthetic_only"}
                 if not baseline_passed and not (report["status"] == "quality_failed" and job.get("recovery") != "none"):
                     job.update(status="failed", stage="Verification failed", summary=report["status"],
