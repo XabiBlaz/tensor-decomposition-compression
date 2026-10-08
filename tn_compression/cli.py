@@ -94,7 +94,22 @@ def run(args):
         preflight_language_assets(config, allow_download=bool(os.environ.get("TN_ALLOW_HF_DOWNLOAD") == "1"),
                                   check_data=args.command not in {"snapshot", "inspect", "layers"},
                                   check_model=not bool(args.checkpoint))
-    if args.command == "benchmark":
+    if args.command == "split-ids":
+        if config.get("task") == "causal_lm":
+            raise ValueError("Split inventory currently supports vision datasets.")
+        roles = {role: analysis_batches(config, role)[1]
+                 for role in ("train", "calibration", "validation", "test")}
+        if sum(map(len, roles.values())) != len(set().union(*map(set, roles.values()))):
+            raise ValueError("Dataset role IDs overlap.")
+        result = {"roles": roles, "split_seed": config.get("data", {}).get("seed", 42),
+                  "source": config.get("data", {}).get("kind")}
+        if result["source"] == "oxford_pet":
+            result.update(official_split={"train": "trainval", "calibration": "trainval",
+                                          "validation": "trainval", "test": "test"},
+                          trainval_partition="SHA256(seed:image_id), sorted; 70% train, 10% calibration, 20% validation",
+                          trimap_mapping={"1_pet": 0, "2_background": 1, "3_border": 2},
+                          resize="image bilinear, trimap nearest neighbor")
+    elif args.command == "benchmark":
         if not args.checkpoint:
             raise ValueError("benchmark requires --checkpoint.")
         from .benchmark import benchmark_bundle
@@ -293,9 +308,13 @@ def run(args):
                 raise ValueError("finetune requires an explicit compressed --checkpoint.")
             from .tasks.vision import train_vision
             training = dict(config.get("training", {}))
-            result = {"history": train_vision(model, vision_batches(config, "train"), vision_batches(config, "validation"),
+            train_batches = vision_batches(config, "train")
+            validation_batches = vision_batches(config, "validation")
+            result = {"history": train_vision(model, train_batches, validation_batches,
                                                task=config.get("task", "segmentation"), num_classes=config.get("num_classes", 3),
-                                               binary=config.get("binary", False), device=device, **training)}
+                                               binary=config.get("binary", False), device=device, **training),
+                      "train_ids": getattr(train_batches.dataset, "identifiers", None),
+                      "validation_ids": getattr(validation_batches.dataset, "identifiers", None)}
             save_bundle(model, output / "bundle", metadata={"workflow": config, "training": result})
         elif args.command == "evaluate":
             result = evaluate(model, config, args.role, device)
@@ -334,7 +353,7 @@ def main(argv=None):
     import logging
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Inspect, compress and evaluate configurable PyTorch models.")
-    parser.add_argument("command", choices=["inspect", "layers", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "generate", "export", "export-language-onnx", "benchmark"])
+    parser.add_argument("command", choices=["inspect", "layers", "split-ids", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "generate", "export", "export-language-onnx", "benchmark"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint")
     parser.add_argument("--output-dir", required=True)

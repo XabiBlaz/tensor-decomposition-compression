@@ -1,0 +1,49 @@
+# Bounded real-data pilot. The runner records the resolved paths, split IDs and Git SHA.
+seed: 7
+task: segmentation
+num_classes: 3
+model:
+  source: smp
+  name: Unet
+  weights: null  # Seeded random initialization; no mutable pretrained download.
+  kwargs:
+    encoder_name: resnet18
+    encoder_depth: 3
+    decoder_channels: [64, 32, 16]
+    classes: 3
+data:
+  kind: oxford_pet
+  root: data/pets
+  download: false
+  seed: 42  # Fixed across model seeds, so all runs use the same image IDs.
+  size: 160
+  batch_size: 8
+  limits: {train: 1536, calibration: 16, validation: 128, test: 256}
+training:
+  epochs: 8
+  learning_rate: 0.001
+  weight_decay: 0.0001
+analysis:
+  level: validated
+  backend: pytorch
+  quality_metric: mean_iou
+  target_size_mb: 43.0
+  max_quality_loss: 0.05
+  include: [encoder.layer2.0.conv1, encoder.layer2.0.conv2, encoder.layer2.1.conv1, encoder.layer2.1.conv2]
+  max_samples: 8
+  max_spatial_size: 16
+  max_validated_per_layer: 2
+  candidate_grid:
+    linear: {methods: []}
+    conv2d: {methods: [partial_tucker], rank_ratios: [0.5, 0.75]}
+    quantization: {enabled: false}
+    gated_mlp: {methods: []}
+benchmark:
+  input_shape: [1, 3, 160, 160]
+  warmup: 2
+  iterations: 8
+  threads: 2
+pilot:
+  simple_energies: [0.55, 0.70, 0.85]
+  storage_match_tolerance: 0.05
+  recovery_training: {epochs: 2, learning_rate: 0.0001, weight_decay: 0.0001, policy: all}

@@ -89,13 +89,21 @@ class LabeledImageFolder(Dataset):
 
 class OxfordPetDataset(Dataset):
     def __init__(self, root, role="train", task="segmentation", size=256,
-                 binary=False, download=False, seed=42, normalize=True):
+                 binary=False, download=False, seed=42, normalize=True, limits=None):
         from torchvision.datasets import OxfordIIITPet
         self.dataset = OxfordIIITPet(root, split="test" if role == "test" else "trainval",
                                     target_types=["segmentation", "category"], download=download)
         self.task, self.size, self.binary, self.normalize = task, size, binary, normalize
         identifiers = [path.stem for path in self.dataset._images]
         self.indices = list(range(len(identifiers))) if role == "test" else split_indices(identifiers, seed=seed)[role]
+        if limits is not None:
+            if (not isinstance(limits, dict) or set(limits) - {"train", "calibration", "validation", "test"}
+                    or any(isinstance(value, bool) or not isinstance(value, int) or value < 1
+                           for value in limits.values())):
+                raise ValueError("Oxford Pet limits must be positive integer counts by dataset role.")
+            if limits.get(role, 0) > len(self.indices):
+                raise ValueError(f"Oxford Pet {role} limit exceeds the available split.")
+            self.indices = self.indices[:limits.get(role, len(self.indices))]
         self.identifiers = [identifiers[index] for index in self.indices]
 
     def __len__(self):

@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from tn_compression.api import apply_compression_plan, build_plan
 from tn_compression.checkpoints import load_bundle, save_bundle
-from tn_compression.tasks.data import SyntheticVisionDataset, map_pet_mask, split_indices
+from tn_compression.tasks.data import OxfordPetDataset, SyntheticVisionDataset, map_pet_mask, split_indices
 from tn_compression.tasks.vision import evaluate_vision, task_loss, train_vision
 
 
@@ -60,6 +60,26 @@ def test_roles_are_disjoint_reproducible_and_exhaustive():
     assert len(set(sum(split.values(), []))) == 100
     with pytest.raises(ValueError, match="unique"):
         split_indices(["same", "same"])
+
+
+def test_pet_role_limits_keep_disjoint_recorded_ids(monkeypatch):
+    from pathlib import Path
+    from torchvision import datasets
+
+    class StubPet:
+        def __init__(self, root, split, target_types, download):
+            prefix = "heldout" if split == "test" else "trainval"
+            self._images = [Path(f"{prefix}-{index}.jpg") for index in range(100)]
+
+    monkeypatch.setattr(datasets, "OxfordIIITPet", StubPet)
+    limits = {"train": 8, "calibration": 4, "validation": 6, "test": 9}
+    roles = {role: OxfordPetDataset("unused", role=role, limits=limits).identifiers
+             for role in limits}
+    assert {role: len(ids) for role, ids in roles.items()} == limits
+    assert len(set(sum(roles.values(), []))) == sum(limits.values())
+    assert roles["train"] == OxfordPetDataset("unused", limits=limits).identifiers
+    with pytest.raises(ValueError, match="exceeds"):
+        OxfordPetDataset("unused", limits={"train": 100})
 
 
 def test_classification_metrics_are_weighted_by_examples():
