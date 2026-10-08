@@ -460,8 +460,11 @@ class JobManager:
         study.update(selected_test=read_json(directory / "compressed-evaluation" / "evaluate.json"),
                      comparison_status=report["status"], selected_bundle_archive=archive.name)
         (study_dir / "study.json").write_text(json.dumps(study, indent=2) + "\n", encoding="utf-8")
-        job.update(status="completed", stage="Language study complete", summary=report["status"])
-        if report["status"] != "verified":
+        verified = report["status"] == "verified"
+        job.update(status="completed" if verified else "failed",
+                   stage="Language study complete" if verified else "Language study verification failed",
+                   summary=report["status"])
+        if not verified:
             job["error"] = "; ".join(report.get("reasons", [])) or "Selected artifact did not verify."
 
     def _execute(self, job):

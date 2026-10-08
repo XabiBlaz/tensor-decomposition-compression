@@ -270,6 +270,23 @@ class UIJobsTests(unittest.TestCase):
         self.assertFalse(any(item["name"].endswith("model-fixed-logits.onnx")
                              for item in result["artifacts"]))
 
+        def mismatched_runner(argv, **kwargs):
+            completed = runner(argv, **kwargs)
+            output = Path(argv[argv.index("--output-dir") + 1])
+            if argv[3] == "benchmark" and output.name == "compressed-benchmark":
+                path = output / "benchmark.json"
+                measured = json.loads(path.read_text())
+                measured["workload_id"] = "different-prompt"
+                path.write_text(json.dumps(measured))
+            return completed
+
+        rejected_manager = self.manager(mismatched_runner)
+        rejected = rejected_manager.submit({"config": config, "mode": "compress", "device": "cpu"})
+        rejected_manager.pool.shutdown(wait=True)
+        failed = rejected_manager.get(rejected["id"])
+        self.assertEqual(failed["status"], "failed")
+        self.assertEqual(failed["summary"], "measurement_failed")
+
 
 if __name__ == "__main__":
     unittest.main()
