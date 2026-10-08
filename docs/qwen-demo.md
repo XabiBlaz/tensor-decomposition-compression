@@ -17,11 +17,12 @@ docker compose -f compose.yaml -f compose.gpu.yaml exec ui python -c \
   "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0)); print((torch.ones(1, device='cuda') + 1).item())"
 ```
 
-This machine has the legacy 460.106.00 driver, so the overlay sets
-`NVIDIA_DISABLE_REQUIRE=1`. CUDA 11 minor-version compatibility was accepted
-only after the displayed PyTorch device allocation and arithmetic check passed.
-On another host, use a current NVIDIA driver and remove that compatibility
-override if it is unnecessary; device discovery alone is not a sufficient test.
+The recorded GPU host used the legacy 460.106.00 driver with
+`NVIDIA_DISABLE_REQUIRE=1`. The overlay now keeps driver requirement checks on
+by default. On that legacy host only, set `NVIDIA_DISABLE_REQUIRE=1` before the
+Compose commands above, then require the displayed PyTorch allocation and
+arithmetic check before running the study. On other hosts, use a compatible
+driver without the override; device discovery alone is not a sufficient test.
 
 Open `http://localhost:7860`, choose **Run the Qwen2.5 language study**, keep
 **Compress a model** selected, choose **GPU**, and leave **Download missing
