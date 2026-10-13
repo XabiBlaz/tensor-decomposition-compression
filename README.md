@@ -180,6 +180,7 @@ containers/              Research and serving environments
 - [Runnable workflows](docs/workflows.md) — the full train → compress → recover → evaluate → export → benchmark lifecycle
 - [Language experiments](docs/language.md) — calibrated low-rank, pruning, quantization, and Qwen pilot details
 - [Qwen UI demo](docs/qwen-demo.md) — setup, clicks, measured GPU result, artifacts, and limitations
+- [Native LLM pilot](docs/llm-pilot.md) — GPTQ/AWQ comparison and held-out evaluation runner; GPU verification pending
 - [Oxford Pet pilot runbook](docs/pet-pilot.md) — planned real-data segmentation comparison and GPU setup; results pending
 - [Serving and quantization](docs/serving.md) — backend compatibility and measurement protocol
 - [Demo measurements](docs/demo.md) — recorded synthetic integration results and their limits
