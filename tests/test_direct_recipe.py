@@ -52,6 +52,38 @@ class DirectRecipeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Llama/Qwen"):
             validate_recipe({"methods": ["pruning"], "pruning_retention": 0.8}, "classification")
 
+    def test_exact_qwen_layer_can_be_factorized_then_quantized_after_pruning(self):
+        from tn_compression.models import load_model
+
+        torch.manual_seed(4)
+        model = load_model({"source": "transformers", "config": {
+            "model_type": "qwen2", "hidden_size": 32, "intermediate_size": 64,
+            "num_hidden_layers": 2, "num_attention_heads": 4,
+            "num_key_value_heads": 4, "vocab_size": 64}}).eval()
+        recipe = {"methods": ["pruning", "tensor_decomposition", "quantization"],
+                  "pruning_retention": 0.75, "svd_energy": 0.5, "quantization_bits": 8,
+                  "include": ["model.layers.0.mlp.down_proj"]}
+        report = apply_direct_recipe(model, recipe, task="causal_lm")
+        self.assertEqual(report["applied_methods"], recipe["methods"])
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "bundle"
+            save_bundle(model, bundle)
+            loaded, _ = load_bundle(bundle)
+            tokens = torch.tensor([[1, 2, 3, 4]])
+            with torch.no_grad():
+                torch.testing.assert_close(model(tokens).logits, loaded(tokens).logits)
+
+    def test_quick_ui_preset_produces_real_tensor_saving(self):
+        from tn_compression.models import load_model
+        from tn_compression.ui.jobs import read_json
+        from tn_compression.ui.server import PRESETS
+
+        config = next(item["config"] for item in read_json(PRESETS) if item["id"] == "smoke")
+        torch.manual_seed(config["seed"])
+        report = apply_direct_recipe(load_model(config["model"]), config["recipe"], task=config["task"])
+        self.assertGreater(report["tensor_bytes_saved"], 0)
+        self.assertLess(report["compressed_tensor_bytes"], config["analysis"]["target_size_mb"] * 1048576)
+
 
 if __name__ == "__main__":
     unittest.main()

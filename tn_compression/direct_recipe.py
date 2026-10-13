@@ -59,7 +59,11 @@ def apply_direct_recipe(model, recipe, *, task):
                        "tensor_bytes_after": _tensor_bytes(model)})
     if "quantization" in methods:
         from .packed_quantization import quantize_int8_weights
-        report = quantize_int8_weights(model, include=recipe.get("include"), exclude=recipe.get("exclude"))
+        include = recipe.get("include")
+        if include and "tensor_decomposition" in methods:
+            include = [*include, *(f"{layer['path']}.*" for layer in stages[-1]["report"]["layers"]
+                                   if layer["status"] == "compressed")]
+        report = quantize_int8_weights(model, include=include, exclude=recipe.get("exclude"))
         stages.append({"method": "quantization", "report": report,
                        "tensor_bytes_after": _tensor_bytes(model)})
     final = _tensor_bytes(model)

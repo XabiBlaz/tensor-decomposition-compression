@@ -44,6 +44,7 @@
   const mode = () => document.querySelector('input[name="mode"]:checked').value;
   const isLanguage = () => state.config?.task === "causal_lm";
   const isLanguageStudy = () => isLanguage() && Boolean(state.config?.language_study);
+  const presetStudy = () => state.presets.find((item) => item.id === $("preset").value)?.config?.language_study;
   function updateSubmit() {
     const config = state.config, kind = config.data?.kind, language = isLanguage();
     const missing = !state.valid ? "Fix the Advanced configuration JSON before starting." :
@@ -60,7 +61,7 @@
     $("readiness").classList.toggle("warning", Boolean(missing) || isDemo(config));
     $("run-summary").textContent = `${mode() === "compress" ? "Compress and compare" : "Inspect layers in"} ${config.model?.name || "your model"} · ${taskNames[config.task] || "Choose a task"} · ${$("device").value.toUpperCase()}`;
   }
-  function metricHelp() { const metric = $("metric").value, lower = ["loss", "nll"].includes(metric); $("quality-label").textContent = lower ? "Maximum allowed increase" : "Maximum allowed decrease"; $("metric-help").textContent = lower ? "The compressed model's loss may rise by at most this amount." : "For a metric on a 0–1 scale, 0.01 means one percentage point."; }
+  function metricHelp() { const metric = $("metric").value, lower = ["loss", "nll"].includes(metric); $("quality-label").textContent = lower ? "Maximum allowed increase" : "Maximum allowed decrease"; $("metric-help").textContent = metric === "nll" ? "Average next-token negative log probability (nats/token); lower is better. Perplexity = exp(NLL)." : lower ? "The compressed model's loss may rise by at most this amount." : "For a metric on a 0–1 scale, 0.01 means one percentage point."; }
   function syncFields() {
     const config = state.config, analysis = config.analysis || {};
     $("task").value = taskNames[config.task] || config.task;
@@ -82,6 +83,7 @@
     $("method-tensor").checked = methods.includes("tensor_decomposition");
     $("method-quantization").checked = methods.includes("quantization");
     $("method-pruning").checked = methods.includes("pruning");
+    $("language-workflow").value = isLanguageStudy() ? "study" : "custom";
     $("svd-energy").value = config.recipe?.svd_energy ?? 0.95;
     $("pruning-retention").value = config.recipe?.pruning_retention ?? 0.8;
     updateModeFields();
@@ -96,6 +98,7 @@
     metricHelp();
   }
   function updateModeFields() {
+    show("language-workflow-fields", mode() === "compress" && isLanguage() && Boolean(presetStudy()));
     show("recipe-fields", mode() === "compress" && !isLanguageStudy());
     show("language-study-fields", mode() === "compress" && isLanguageStudy());
     show("goal-fields", mode() === "compress");
@@ -350,6 +353,16 @@
     } catch { setConnection(false); } finally { state.polling = false; }
   }
   $("preset").addEventListener("change", selectPreset);
+  $("language-workflow").addEventListener("change", () => {
+    if ($("language-workflow").value === "study") {
+      state.config.language_study = clone(presetStudy());
+      delete state.config.recipe;
+    } else delete state.config.language_study;
+    $("preset-description").textContent = $("language-workflow").value === "study"
+      ? state.presets.find((item) => item.id === $("preset").value).description
+      : "Choose your methods for the pinned language model below. This recipe is compared once with the original on held-out data.";
+    guidedChange();
+  });
   $("model").addEventListener("change", () => {
     const previous = state.config.model?.name || "", next = $("model").value.trim();
     if (next !== previous && isLanguage()) {
@@ -400,7 +413,7 @@
   });
   $("import-config").addEventListener("change", async (event) => {
     const file = event.target.files[0]; if (!file) return;
-    try { if (file.size > 200 * 1024) throw new Error("Configuration files must be smaller than 200 KiB."); const value = validateConfig(JSON.parse(await file.text())); state.config = value; state.targetEdited = true; $("checkpoint").value = ""; $("checkpoint-details").open = false; document.querySelector(`input[name="mode"][value="${value.recipe ? "compress" : "analyze"}"]`).checked = true; syncFields(); writeConfig(); updateSubmit(); $("preset-description").textContent = `Imported configuration: ${file.name}`; error(""); } catch (exception) { error(`Could not import configuration: ${exception.message}`); } finally { event.target.value = ""; }
+    try { if (file.size > 200 * 1024) throw new Error("Configuration files must be smaller than 200 KiB."); const value = validateConfig(JSON.parse(await file.text())); state.config = value; state.targetEdited = true; $("checkpoint").value = ""; $("checkpoint-details").open = false; document.querySelector(`input[name="mode"][value="${value.recipe || value.language_study ? "compress" : "analyze"}"]`).checked = true; syncFields(); writeConfig(); updateSubmit(); $("preset-description").textContent = `Imported configuration: ${file.name}`; error(""); } catch (exception) { error(`Could not import configuration: ${exception.message}`); } finally { event.target.value = ""; }
   });
   $("download-config").addEventListener("click", () => { if (!readConfig()) return; const url = URL.createObjectURL(new Blob([JSON.stringify(state.config, null, 2) + "\n"], { type: "application/json" })); const link = element("a"); link.href = url; link.download = "compression-config.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); });
   $("run-form").addEventListener("submit", async (event) => {

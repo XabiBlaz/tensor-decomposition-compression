@@ -22,6 +22,11 @@
         "size": 32,
         "batch_size": 2
       },
+      "recipe": {
+        "methods": ["tensor_decomposition"],
+        "svd_energy": 0.5,
+        "include": ["layer1.0.conv1"]
+      },
       "analysis": {
         "level": "validated",
         "backend": "pytorch",

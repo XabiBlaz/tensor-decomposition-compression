@@ -74,6 +74,7 @@ class UIJobsTests(unittest.TestCase):
             validate_request(self.payload(), self.data)
 
     def test_infeasible_plan_never_compresses(self):
+        self.config.pop("recipe", None)
         commands = []
         def runner(argv, **kwargs):
             command = argv[3]
