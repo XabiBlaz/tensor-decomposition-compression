@@ -182,6 +182,7 @@ containers/              Research and serving environments
 - [Qwen UI demo](docs/qwen-demo.md) — setup, clicks, measured GPU result, artifacts, and limitations
 - [Native LLM pilot](docs/llm-pilot.md) — RTN/GPTQ/AWQ comparison and held-out evaluation runner; GPU verification pending
 - [LLM compression choices](docs/llm-methods.md) — techniques, deployment requirements and current capability limits
+- [Interface design](DESIGN.md) — guided flow, interaction patterns, accessibility and responsive behavior
 - [Oxford Pet pilot runbook](docs/pet-pilot.md) — planned real-data segmentation comparison and GPU setup; results pending
 - [Serving and quantization](docs/serving.md) — backend compatibility and measurement protocol
 - [Demo measurements](docs/demo.md) — recorded synthetic integration results and their limits

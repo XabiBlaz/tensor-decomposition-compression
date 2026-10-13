@@ -4,7 +4,7 @@
   const state = { presets: [], jobs: [], config: {}, selected: null, job: null, polling: false, pending: false, uploading: false, targetEdited: false, valid: true };
   const activeStatuses = new Set(["queued", "running"]);
   const taskNames = { classification: "Image classification", segmentation: "Image segmentation", detection: "Object detection", causal_lm: "Language modeling" };
-  const metricNames = { loss: "Validation loss", nll: "Token NLL", accuracy: "Accuracy", top1: "Top-1 accuracy", mean_iou: "Mean IoU", mean_dice: "Mean Dice", ap: "Average precision" };
+  const metricNames = { loss: "Task loss", nll: "Token NLL", accuracy: "Accuracy", top1: "Top-1 accuracy", mean_iou: "Mean IoU", mean_dice: "Mean Dice", ap: "Average precision" };
   const rateMetrics = new Set(["accuracy", "top1", "mean_iou", "mean_dice", "ap"]);
   const resourceNames = { parameters: "Parameters", tensor_bytes: "Tensor size (bytes)", bundle_file_bytes: "Serialized bundle (bytes)", latency_mean_ms: "Mean latency (ms)", latency_p50_ms: "P50 latency (ms)", latency_p95_ms: "P95 latency (ms)", rss_load_peak_bytes: "Peak load RSS (bytes)", rss_inference_peak_bytes: "Peak inference RSS (bytes)", cuda_allocated_peak_bytes: "Peak CUDA allocation (bytes)", cuda_reserved_peak_bytes: "Peak CUDA reservation (bytes)", output_tokens_per_second: "Output tokens / second" };
   const allowedMetrics = { classification: ["loss", "accuracy", "top1"], segmentation: ["loss", "mean_iou", "mean_dice"], detection: ["ap"], causal_lm: ["nll"] };
@@ -45,21 +45,80 @@
   const isLanguage = () => state.config?.task === "causal_lm";
   const isLanguageStudy = () => isLanguage() && Boolean(state.config?.language_study);
   const presetStudy = () => state.presets.find((item) => item.id === $("preset").value)?.config?.language_study;
+  let setupStep = 0;
+  function modelIssue() {
+    const config = state.config, language = isLanguage(), kind = config.data?.kind;
+    if (!state.presets.length) return "Loading model choices…";
+    if (!$("model").value.trim()) return "Enter the model architecture or repository.";
+    if (!kind) return "Choose evaluation data.";
+    if (!language && (kind !== "synthetic" || $("preset").value === "trained-synthetic") && !config.model.state_dict_path && !$("checkpoint").value.trim()) return "Upload trained weights, or enter an existing model bundle.";
+    if (!language && ["image_folder", "oxford_pet"].includes(kind) && !$("data-root").value.trim()) return "Enter the dataset folder under /data.";
+    if (language && (!$("tokenizer-name").value.trim() || !/^[0-9a-f]{40}$/.test($("model-revision").value) || !/^[0-9a-f]{40}$/.test($("tokenizer-revision").value))) return "Enter a tokenizer and full 40-character model and tokenizer versions.";
+    if (!language && (!Number.isInteger(Number($("num-classes").value)) || Number($("num-classes").value) < 2)) return "Enter a class count of at least two.";
+    return "";
+  }
+  function methodIssue() {
+    if (mode() !== "compress" || isLanguageStudy()) return "";
+    if (!["method-tensor", "method-quantization", "method-pruning"].some((id) => $(id).checked)) return "Choose at least one compression method.";
+    if ($("method-tensor").checked && (!finite(Number($("svd-energy").value)) || Number($("svd-energy").value) <= 0 || Number($("svd-energy").value) > 1)) return "Set SVD energy above 0 and at most 1.";
+    if ($("method-pruning").checked && (!finite(Number($("pruning-retention").value)) || Number($("pruning-retention").value) <= 0 || Number($("pruning-retention").value) >= 1)) return "Set channels to keep above 0 and below 1.";
+    return "";
+  }
+  function reviewIssue() {
+    if (mode() !== "compress") return "";
+    if ($("quality").value === "" || !finite(Number($("quality").value)) || Number($("quality").value) < 0) return "Set a nonnegative quality limit under Quality limits and size target.";
+    if ($("target").value !== "" && (!finite(Number($("target").value)) || Number($("target").value) <= 0)) return "Set a positive size target, or leave it blank.";
+    return "";
+  }
+  function renderReview() {
+    const config = state.config;
+    const methodLabels = { tensor_decomposition: `SVD · energy ${config.recipe?.svd_energy}`, quantization: "Packed int8 weight storage", pruning: `Gated MLP pruning · retain ${config.recipe?.pruning_retention}` };
+    const methods = mode() === "analyze" ? "Layer loss sensitivity · model unchanged" : isLanguageStudy() ? "Fixed validation study · three preset trials" : (config.recipe?.methods || []).map((method) => methodLabels[method] || humanize(method)).join(" + ");
+    const rows = [["Model", config.model?.name || "Choose a model"], ["Task", taskNames[config.task] || config.task],
+      ["Data", isDemo(config) ? "Synthetic demo · workflow check only" : config.data?.name || humanize(config.data?.kind)], ["Methods", methods || "Choose methods"],
+      ["Compute", $("device").value === "cpu" ? "CPU" : "NVIDIA GPU · CUDA required"],
+      ["Downloads", isLanguage() && $("allow-download").checked ? "Missing pinned assets may be downloaded" : "Cached or local assets only"],
+      ["Recovery", mode() === "analyze" || $("recovery").value === "none" ? "None" : $("recovery").selectedOptions[0].textContent]];
+    if (mode() === "compress") rows.push(["Quality limit", `${metricNames[$("metric").value]} · maximum ${["nll", "loss"].includes($("metric").value) ? "increase" : "decrease"} ${$("quality").value}`]);
+    $("review-summary").replaceChildren(...rows.flatMap(([label, value]) => [element("dt", label), element("dd", value)]));
+    show("quality-settings", mode() === "compress");
+  }
+  function setSetupStep(next, focus = true) {
+    const issue = !state.valid ? "Fix the Advanced configuration JSON before continuing." : next > 0 ? modelIssue() || (next > 1 ? methodIssue() : "") : "";
+    if (issue) { updateSubmit(); error(issue); return; }
+    error("");
+    setupStep = next;
+    document.querySelectorAll("[data-step]").forEach((panel) => { panel.hidden = Number(panel.dataset.step) !== next; });
+    document.querySelectorAll("[data-go-step]").forEach((button) => {
+      if (Number(button.dataset.goStep) === next) button.setAttribute("aria-current", "step");
+      else button.removeAttribute("aria-current");
+    });
+    show("step-back", next > 0); show("step-next", next < 2); show("submit", next === 2);
+    $("step-next").textContent = next === 0 ? "Continue to methods" : "Review your run";
+    renderReview(); updateSubmit();
+    if (focus) {
+      const heading = $(["setup-title", "options-title", "review-title"][next]);
+      heading.closest("[data-step]").classList.remove("step-enter");
+      heading.closest("[data-step]").classList.add("step-enter");
+      heading.focus();
+    }
+  }
   function updateSubmit() {
-    const config = state.config, kind = config.data?.kind, language = isLanguage();
-    const missing = !state.valid ? "Fix the Advanced configuration JSON before starting." :
-      !state.presets.length ? "Loading model choices…" :
-      !config.model?.name ? "Enter the model architecture or repository." :
-      !kind ? "Choose evaluation data." :
-      !language && (kind !== "synthetic" || $("preset").value === "trained-synthetic") && !config.model.state_dict_path && !$("checkpoint").value.trim() ? "Upload trained weights, or enter an existing model bundle." :
-      !language && ["image_folder", "oxford_pet"].includes(kind) && !$("data-root").value.trim() ? "Enter the dataset folder under /data." :
-      language && (!$("tokenizer-name").value.trim() || !/^[0-9a-f]{40}$/.test($("model-revision").value) || !/^[0-9a-f]{40}$/.test($("tokenizer-revision").value)) ? "Enter a tokenizer and full 40-character model and tokenizer versions." :
-      mode() === "compress" && !isLanguageStudy() && !["method-tensor", "method-quantization", "method-pruning"].some((id) => $(id).checked) ? "Choose at least one compression method." : "";
+    const config = state.config, language = isLanguage();
+    const modelMissing = modelIssue(), methodMissing = methodIssue();
+    const missing = !state.valid ? "Fix the Advanced configuration JSON before starting." : modelMissing || methodMissing || reviewIssue();
+    const stepIssue = !state.valid ? missing : modelMissing || (setupStep > 0 ? methodMissing : "");
+    $("step-next").disabled = state.pending || state.uploading || Boolean(stepIssue);
+    $("step-methods").disabled = state.pending || state.uploading || !state.valid || Boolean(modelMissing);
+    $("step-review").disabled = state.pending || state.uploading || !state.valid || Boolean(modelMissing || methodMissing);
+    $("step-model").disabled = state.pending || state.uploading;
+    $("step-back").disabled = state.pending || state.uploading;
     $("submit").disabled = state.pending || state.uploading || !state.valid || Boolean(missing);
     $("submit").firstChild.textContent = state.pending ? "Starting run… " : state.uploading ? "Uploading weights… " : mode() === "compress" && isLanguageStudy() ? "Run fixed study " : mode() === "compress" ? "Compress & compare " : "Inspect layers ";
-    $("readiness").textContent = missing || (isDemo(config) ? "Ready for a synthetic workflow demo. Its quality numbers do not describe a trained model." : language ? $("allow-download").checked ? "Ready to start. Missing pinned Hugging Face files may be downloaded." : "Ready to start if the pinned Hugging Face files are cached. Otherwise, enable downloads." : "Ready to run. Quality will be checked on your selected data.");
-    $("readiness").classList.toggle("warning", Boolean(missing) || isDemo(config));
+    $("readiness").textContent = (setupStep === 2 ? missing : stepIssue) || (setupStep === 0 ? "Next: choose how to compress or inspect this model. Nothing runs yet." : setupStep === 1 ? "Next: review your configuration before starting." : isDemo(config) ? "Ready for a synthetic workflow demo. Its quality numbers do not describe a trained model." : language ? $("allow-download").checked ? "Ready to start. Missing pinned Hugging Face files may be downloaded." : "Ready to start if the pinned Hugging Face files are cached. Otherwise, enable downloads." : "Ready to run. Quality will be checked on your selected data.");
+    $("readiness").classList.toggle("warning", Boolean(setupStep === 2 ? missing : stepIssue) || setupStep === 2 && isDemo(config));
     $("run-summary").textContent = `${mode() === "compress" ? "Compress and compare" : "Inspect layers in"} ${config.model?.name || "your model"} · ${taskNames[config.task] || "Choose a task"} · ${$("device").value.toUpperCase()}`;
+    if (setupStep === 2) renderReview();
   }
   function metricHelp() { const metric = $("metric").value, lower = ["loss", "nll"].includes(metric); $("quality-label").textContent = lower ? "Maximum allowed increase" : "Maximum allowed decrease"; $("metric-help").textContent = metric === "nll" ? "Average next-token negative log probability (nats/token); lower is better. Perplexity = exp(NLL)." : lower ? "The compressed model's loss may rise by at most this amount." : "For a metric on a 0–1 scale, 0.01 means one percentage point."; }
   function syncFields() {
@@ -98,6 +157,7 @@
     metricHelp();
   }
   function updateModeFields() {
+    show("methods-help", mode() === "compress");
     show("language-workflow-fields", mode() === "compress" && isLanguage() && Boolean(presetStudy()));
     show("recipe-fields", mode() === "compress" && !isLanguageStudy());
     show("language-study-fields", mode() === "compress" && isLanguageStudy());
@@ -160,6 +220,7 @@
     const preset = state.presets.find((item) => item.id === $("preset").value);
     if (!preset) return;
     state.config = clone(preset.config); state.targetEdited = false; $("preset-description").textContent = preset.description || "";
+    $("model-settings").open = preset.id !== "smoke";
     $("allow-download").checked = isLanguage();
     $("checkpoint").value = preset.checkpoint || state.config.model?.checkpoint || "";
     $("checkpoint-details").open = Boolean($("checkpoint").value);
@@ -192,17 +253,20 @@
       request.send(file);
     });
   }
-  function showSetup() { state.selected = null; state.job = null; show("setup", true); show("run-detail", false); error(""); renderHistory(); }
+  function showSetup() { state.selected = null; state.job = null; show("setup", true); show("run-detail", false); error(""); setSetupStep(0); renderHistory(); }
   function renderHistory() {
+    const focusedJob = document.activeElement.closest("#history [data-job-id]")?.dataset.jobId;
     if (!state.jobs.length) { $("history").replaceChildren(element("p", "Your first run starts here. Completed runs will appear in this list.", "muted")); return; }
     $("history").replaceChildren(...state.jobs.map((job) => {
       const button = element("button", undefined, `history-item${state.selected === job.id ? " active" : ""}`); button.type = "button";
+      button.dataset.jobId = job.id;
       button.setAttribute("aria-current", state.selected === job.id ? "true" : "false");
       const title = job.config?.model?.name || job.model_name || job.name || `Run ${String(job.id).slice(0, 8)}`;
       const date = new Date(job.created_at);
       button.append(element("strong", title), element("small", Number.isNaN(date.valueOf()) ? job.id : date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })), element("span", humanize(job.status), `history-state ${safeStatus(job.status)}`));
       button.addEventListener("click", () => selectJob(job.id)); return button;
     }));
+    if (focusedJob) [...$("history").children].find((button) => button.dataset.jobId === focusedJob)?.focus({ preventScroll: true });
   }
   function safeStatus(value) { return ["queued", "running", "completed", "infeasible", "failed", "interrupted"].includes(value) ? value : "unknown"; }
   async function refreshJobs() { const result = await api("/api/jobs"); state.jobs = result.jobs || []; renderHistory(); setConnection(true); }
@@ -242,7 +306,7 @@
   function renderDirect(direct) {
     show("direct-panel", Boolean(direct));
     if (!direct) return;
-    $("direct-summary").textContent = `${mib(direct.original_tensor_bytes)} original → ${mib(direct.compressed_tensor_bytes)} after compression. The final quality and runtime measurements appear below when verification completes.`;
+    $("direct-summary").textContent = `${mib(direct.original_tensor_bytes)} original → ${mib(direct.compressed_tensor_bytes)} after compression.`;
     $("direct-stages").replaceChildren(...(direct.applied_methods || []).map((method) => element("span", humanize(method), "method-tag")));
   }
   function renderStudy(study) {
@@ -328,10 +392,12 @@
   function renderJob(job) {
     $("reuse").disabled = !job.config;
     $("run-title").textContent = job.config?.model?.name || job.model_name || "Compression run";
-    $("run-id").textContent = `RUN ${job.id}`;
+    $("run-id").textContent = `Run ${job.id}`;
     $("run-subtitle").textContent = [taskNames[job.config?.task] || job.config?.task, job.device, job.mode === "compress" ? "Compression comparison" : "Layer importance"].filter(Boolean).join(" · ");
-    $("run-status").textContent = humanize(job.status); $("run-status").className = `status ${safeStatus(job.status)}`;
-    $("run-stage").textContent = humanize(job.stage || job.status || "Waiting");
+    const statusLabel = humanize(job.status), stageLabel = humanize(job.stage || job.status || "Waiting");
+    if ($("run-status").textContent !== statusLabel) $("run-status").textContent = statusLabel;
+    $("run-status").className = `status ${safeStatus(job.status)}`;
+    if ($("run-stage").textContent !== stageLabel) $("run-stage").textContent = stageLabel;
     $("activity-indicator").classList.toggle("running", activeStatuses.has(job.status));
     $("run-stage-help").textContent = activeStatuses.has(job.status) ? "Running locally. You can leave this page and return to the results." : job.status === "infeasible" ? "No plan met the requested constraints. Review the evidence and adjust your goals." : job.status === "completed" && job.mode === "analyze" ? "Layer relevance is ready. These scores are diagnostic; compressed quality has not been verified." : job.status === "completed" ? "Run complete. Review quality and resource measurements before using the model." : "Review the execution log for details.";
     show("run-demo-warning", isDemo(job.config) || job.results?.comparison?.synthetic_baseline === true);
@@ -339,7 +405,7 @@
     const logs = $("logs"), nearBottom = logs.scrollTop + logs.clientHeight >= logs.scrollHeight - 40; logs.textContent = job.logs || "Waiting for worker output…"; if (nearBottom) logs.scrollTop = logs.scrollHeight;
     $("artifacts").replaceChildren();
     for (const artifact of job.artifacts || []) {
-      try { const url = new URL(artifact.url, window.location.origin); if (url.origin !== window.location.origin || !["http:", "https:"].includes(url.protocol)) continue; const link = element("a", `${artifact.name} ↓`, "artifact-link"); link.href = url.href; link.download = ""; $("artifacts").append(link); } catch { /* Invalid artifact links are not rendered. */ }
+      try { const url = new URL(artifact.url, window.location.origin); if (url.origin !== window.location.origin || !["http:", "https:"].includes(url.protocol)) continue; const link = element("a", artifact.name, "artifact-link"); link.href = url.href; link.download = ""; link.setAttribute("aria-label", `Download ${artifact.name}`); $("artifacts").append(link); } catch { /* Invalid artifact links are not rendered. */ }
     }
     show("artifacts-panel", $("artifacts").children.length > 0); renderResults(job);
   }
@@ -353,6 +419,9 @@
     } catch { setConnection(false); } finally { state.polling = false; }
   }
   $("preset").addEventListener("change", selectPreset);
+  $("step-next").addEventListener("click", () => setSetupStep(setupStep + 1));
+  $("step-back").addEventListener("click", () => { error(""); setSetupStep(setupStep - 1); });
+  document.querySelectorAll("[data-go-step]").forEach((button) => button.addEventListener("click", () => { error(""); setSetupStep(Number(button.dataset.goStep)); }));
   $("language-workflow").addEventListener("change", () => {
     if ($("language-workflow").value === "study") {
       state.config.language_study = clone(presetStudy());
@@ -376,9 +445,11 @@
     }
     guidedChange();
   });
-  $("target").addEventListener("change", () => { state.targetEdited = true; guidedChange(); });
+  $("target").addEventListener("input", () => { state.targetEdited = true; guidedChange(); });
+  $("checkpoint").addEventListener("input", updateSubmit);
   ["checkpoint", "device", "allow-download"].forEach((id) => $(id).addEventListener("change", updateSubmit));
-  ["quality", "metric", "num-classes", "data-kind", "data-root", "model-revision", "tokenizer-name", "tokenizer-revision", "svd-energy", "pruning-retention"].forEach((id) => $(id).addEventListener("change", guidedChange));
+  ["quality", "metric", "num-classes", "data-kind", "data-root", "model-revision", "tokenizer-name", "tokenizer-revision", "svd-energy", "pruning-retention"].forEach((id) => $(id).addEventListener($(id).tagName === "SELECT" ? "change" : "input", guidedChange));
+  $("model").addEventListener("input", updateSubmit);
   ["method-tensor", "method-quantization", "method-pruning"].forEach((id) => $(id).addEventListener("change", guidedChange));
   $("config").addEventListener("input", readConfig);
   document.querySelectorAll('input[name="mode"]').forEach((input) => input.addEventListener("change", () => {
@@ -417,7 +488,13 @@
   });
   $("download-config").addEventListener("click", () => { if (!readConfig()) return; const url = URL.createObjectURL(new Blob([JSON.stringify(state.config, null, 2) + "\n"], { type: "application/json" })); const link = element("a"); link.href = url; link.download = "compression-config.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); });
   $("run-form").addEventListener("submit", async (event) => {
-    event.preventDefault(); if (!state.valid) { $("advanced").open = true; $("config").focus(); return; } guidedChange();
+    event.preventDefault();
+    if (state.pending || state.uploading) return;
+    if (setupStep < 2) { if (!$("step-next").disabled) setSetupStep(setupStep + 1); return; }
+    if (!state.valid) { $("advanced").open = true; $("config").focus(); return; }
+    guidedChange();
+    const issue = modelIssue() || methodIssue() || reviewIssue();
+    if (issue) { error(issue); if (modelIssue()) setSetupStep(0); else if (methodIssue()) setSetupStep(1); else $("quality-settings").open = true; return; }
     if (isLanguage()) {
       const remote = (value) => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value);
       const commit = (value) => /^[0-9a-f]{40}$/.test(value);
@@ -431,6 +508,7 @@
   });
   async function initialize() {
     $("history-drawer").open = window.matchMedia("(min-width: 981px)").matches;
+    window.matchMedia("(min-width: 981px)").addEventListener("change", (event) => { $("history-drawer").open = event.matches; });
     const outcomes = await Promise.allSettled([api("/api/presets"), api("/api/jobs"), api("/api/health")]);
     if (outcomes[0].status === "fulfilled") { state.presets = outcomes[0].value.presets || []; $("preset").replaceChildren(...state.presets.map((preset) => { const option = element("option", preset.name); option.value = preset.id; return option; })); $("preset").disabled = !state.presets.length; if (state.presets.length) selectPreset(); else error("No presets are available. Check the server configuration."); } else error(`Could not load presets: ${outcomes[0].reason.message} Reload the page to retry.`);
     if (outcomes[1].status === "fulfilled") { state.jobs = outcomes[1].value.jobs || []; renderHistory(); } else $("history").replaceChildren(element("p", "Run history unavailable. Use refresh to retry.", "muted"));
