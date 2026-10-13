@@ -1,0 +1,7 @@
+# Separate Linux GPU environment. Native checkpoint compatibility needs GPU verification.
+vllm==0.31.0
+transformers==5.15.0
+PyYAML==6.0.3
+lm_eval==0.4.13
+datasets==4.8.4
+# vLLM pins its own torch and compressed-tensors dependencies.

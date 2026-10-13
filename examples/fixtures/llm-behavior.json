@@ -1,0 +1,30 @@
+{
+  "validation": [
+    {"id":"v1","slice":"extraction","prompt":"Extract the city from 'Ana lives in Bilbao.' Return only JSON with one key city.","check":"json_equals","expected":{"city":"Bilbao"}},
+    {"id":"v2","slice":"extraction","prompt":"The invoice says total: 42 euros. Return only JSON with the numeric key total.","check":"json_equals","expected":{"total":42}},
+    {"id":"v3","slice":"extraction","prompt":"Find the email in 'Contact us at help@example.org'. Return only JSON with key email.","check":"json_equals","expected":{"email":"help@example.org"}},
+    {"id":"v4","slice":"extraction","prompt":"The meeting is on Tuesday. Return only JSON with key day and the English day name.","check":"json_equals","expected":{"day":"Tuesday"}},
+    {"id":"v5","slice":"instruction","prompt":"Reply with exactly the lowercase word ready. No punctuation or explanation.","check":"exact","expected":"ready"},
+    {"id":"v6","slice":"instruction","prompt":"Return only the JSON array of the words red and blue, in that order.","check":"json_equals","expected":["red","blue"]},
+    {"id":"v7","slice":"instruction","prompt":"Return only an empty JSON object.","check":"json_equals","expected":{}},
+    {"id":"v8","slice":"instruction","prompt":"Responde exactamente con la palabra española listo, en minúsculas y sin puntuación.","check":"exact","expected":"listo"},
+    {"id":"v9","slice":"arithmetic","prompt":"Calculate 7 + 8. Return only JSON with the numeric key answer.","check":"json_equals","expected":{"answer":15}},
+    {"id":"v10","slice":"arithmetic","prompt":"What is 6 times 4? Return only the integer result.","check":"exact","expected":"24"},
+    {"id":"v11","slice":"arithmetic","prompt":"Compute 30 minus 9. Return only JSON with numeric key answer.","check":"json_equals","expected":{"answer":21}},
+    {"id":"v12","slice":"arithmetic","prompt":"Compute half of 18. Return only JSON with numeric key answer.","check":"json_equals","expected":{"answer":9}}
+  ],
+  "test": [
+    {"id":"t1","slice":"extraction","prompt":"Extract the city from 'Ben lives in Madrid.' Return only JSON with one key city.","check":"json_equals","expected":{"city":"Madrid"}},
+    {"id":"t2","slice":"extraction","prompt":"The receipt says total: 37 euros. Return only JSON with the numeric key total.","check":"json_equals","expected":{"total":37}},
+    {"id":"t3","slice":"extraction","prompt":"Find the email in 'Write to team@example.net'. Return only JSON with key email.","check":"json_equals","expected":{"email":"team@example.net"}},
+    {"id":"t4","slice":"extraction","prompt":"The appointment is on Friday. Return only JSON with key day and the English day name.","check":"json_equals","expected":{"day":"Friday"}},
+    {"id":"t5","slice":"instruction","prompt":"Reply with exactly the lowercase word confirmed. No punctuation or explanation.","check":"exact","expected":"confirmed"},
+    {"id":"t6","slice":"instruction","prompt":"Return only the JSON array of the words green and gold, in that order.","check":"json_equals","expected":["green","gold"]},
+    {"id":"t7","slice":"instruction","prompt":"Return only an empty JSON array.","check":"json_equals","expected":[]},
+    {"id":"t8","slice":"instruction","prompt":"Responde exactamente con la palabra española preparado, en minúsculas y sin puntuación.","check":"exact","expected":"preparado"},
+    {"id":"t9","slice":"arithmetic","prompt":"Calculate 9 + 13. Return only JSON with the numeric key answer.","check":"json_equals","expected":{"answer":22}},
+    {"id":"t10","slice":"arithmetic","prompt":"What is 7 times 5? Return only the integer result.","check":"exact","expected":"35"},
+    {"id":"t11","slice":"arithmetic","prompt":"Compute 40 minus 12. Return only JSON with numeric key answer.","check":"json_equals","expected":{"answer":28}},
+    {"id":"t12","slice":"arithmetic","prompt":"Compute half of 26. Return only JSON with numeric key answer.","check":"json_equals","expected":{"answer":13}}
+  ]
+}

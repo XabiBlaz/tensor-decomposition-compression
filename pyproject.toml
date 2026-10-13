@@ -38,6 +38,9 @@ test = [
 [tool.setuptools.packages.find]
 include = ["tn_compression*", "compression*"]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [project.scripts]
 tn-compress = "tn_compression.cli:main"
 tn-compress-ui = "tn_compression.ui.server:main"

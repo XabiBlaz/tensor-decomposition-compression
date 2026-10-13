@@ -8,21 +8,7 @@ from pathlib import Path
 
 from .comparison import build_comparison, bundle_bytes
 from .config import load_config
-
-
-def read(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def write_frozen(path, value):
-    path = Path(path)
-    content = json.dumps(value, indent=2, allow_nan=False) + "\n"
-    if path.exists():
-        if path.read_text(encoding="utf-8") != content:
-            raise ValueError(f"Refusing to resume with changed configuration: {path}")
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+from .run_artifacts import read, write_frozen
 
 
 def energies(config):
