@@ -67,6 +67,9 @@ def prepare(root, study):
 
 
 def recipe(method):
+    if method == "rtn":
+        from llmcompressor.modifiers.quantization import QuantizationModifier
+        return QuantizationModifier(targets="Linear", scheme="W4A16", ignore=["lm_head"])
     if method == "gptq":
         from llmcompressor.modifiers.gptq import GPTQModifier
         return GPTQModifier(targets="Linear", scheme="W4A16", ignore=["lm_head"])
@@ -106,6 +109,7 @@ def compress(root, study, method):
     provenance = {"model": study["config"]["model"], "git_revision": study["git_revision"],
                   "seed": study["config"]["seed"], "method": method, "scheme": "W4A16",
                   "ignore": ["lm_head"], "versions": versions(),
+                  "calibration_role": "weight-only rounding; shared input pass" if method == "rtn" else "data-aware fitting",
                   "calibration_ids": [row["id"] for row in inputs["records"]["calibration"]]}
     (output / "compression-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     hashes = {str(path): sha256(path) for path in sorted(output.iterdir()) if path.is_file()}

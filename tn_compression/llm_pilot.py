@@ -1,4 +1,4 @@
-"""Bounded GPTQ/AWQ study controller; GPU operations run in separate processes."""
+"""Bounded native quantization study; GPU operations run in separate processes."""
 
 import argparse
 import hashlib
@@ -15,7 +15,7 @@ from .run_artifacts import read, write_frozen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-METHODS = ("gptq", "awq")
+METHODS = ("rtn", "gptq", "awq")
 
 
 def sha256(path):
@@ -47,7 +47,7 @@ def validate_spec(config):
         raise ValueError("Data max_length must fit the inference context.")
     methods = config["pilot"]["methods"]
     if not methods or len(set(methods)) != len(methods) or any(method not in METHODS for method in methods):
-        raise ValueError("Use distinct supported pilot methods: gptq, awq.")
+        raise ValueError("Use distinct supported pilot methods: rtn, gptq, awq.")
     for key in ("max_nll_increase", "max_probe_loss"):
         positive(config["pilot"][key], key, zero=True)
     if config["pilot"]["max_probe_loss"] > 1:
@@ -267,6 +267,9 @@ def run(args):
     if benchmark_limit != "full" and (not benchmark_limit.isdigit() or int(benchmark_limit) < 1):
         raise ValueError("benchmark-limit must be a positive sample count or full.")
     public_benchmarks = getattr(args, "benchmarks", False)
+    preflight_only = getattr(args, "preflight_only", False)
+    if preflight_only and (args.finalize or public_benchmarks or args.select):
+        raise ValueError("--preflight-only cannot select or evaluate a final candidate.")
     if public_benchmarks and (not args.finalize or not config.get("benchmarks")):
         raise ValueError("Public benchmarks require --finalize and pinned task definitions.")
     python = {"compression": args.compression_python, "runtime": args.runtime_python}
@@ -285,6 +288,8 @@ def run(args):
         if public_benchmarks:
             phases.extend([(f"{method}-benchmarks-{benchmark_limit}", "runtime", "benchmarks", method, "test")
                            for method in ("dense", args.select)])
+    if preflight_only:
+        phases = phases[:2]
     def command(stage, env, action, method, role):
         argv = [python[env], "-m", "tn_compression.llm_backend", action, "--root", str(output),
                 "--method", method, "--role", role, "--environment", env,
@@ -358,6 +363,9 @@ def run(args):
                 (output / "validation-report.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
                 if args.finalize:
                     frozen = freeze_selection(report)
+    if preflight_only:
+        return {"status": "preflight_complete", "output_dir": str(output),
+                "note": "Both GPU environments checked; no model or dataset was loaded."}
     if args.finalize:
         report = {"selection": read(output / "selection.json"),
                   "dense": read(output / "stages/dense-test.json"),
@@ -386,6 +394,7 @@ def main():
     parser.add_argument("--compression-python", default=sys.executable)
     parser.add_argument("--runtime-python", default=sys.executable)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--preflight-only", action="store_true", help="Check GPU environments without loading models or data.")
     parser.add_argument("--allow-download", action="store_true")
     parser.add_argument("--finalize", action="store_true")
     parser.add_argument("--select", choices=METHODS)

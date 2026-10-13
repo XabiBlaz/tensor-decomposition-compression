@@ -1,7 +1,7 @@
 # Native LLM compression pilot
 
-This first expansion compares a pinned Qwen2.5-1.5B-Instruct baseline with GPTQ
-and AWQ W4A16 (4-bit weights, FP16 activations), then loads their actual native
+This first expansion compares a pinned Qwen2.5-1.5B-Instruct baseline with RTN,
+GPTQ and AWQ W4A16 (4-bit weights, FP16 activations), then loads their actual native
 artifacts in vLLM. It does not replace the existing Qwen demo or its recorded
 result. GPU packing, cross-version checkpoint compatibility and speed are
 **not yet verified**. CPU checks establish controller and scoring behavior only.
@@ -57,7 +57,7 @@ Budget at least the roughly 3 GB FP16 model weights plus calibration/Hessian
 state, activations, packing temporaries and runtime/KV memory. A 16 GB GPU is a
 reasonable pilot target, not a verified memory guarantee. No measured runtime
 estimate exists for this integration. Installs/downloads may dominate the first run.
-Each worker has a 30-minute timeout; there are two compression candidates and one
+Each worker has a 30-minute timeout; there are three compression candidates and one
 seed. There is no training. Interrupted/failed attempts remain inspectable.
 
 ## CPU checks
@@ -105,6 +105,13 @@ python -m tn_compression.llm_pilot --output-dir "$RUN_DIR" --dry-run \
   --compression-python /tmp/tn-compression-env/bin/python \
   --runtime-python /tmp/tn-runtime-env/bin/python
 
+# Check resolved dependencies before downloading any model. Both must pass.
+/tmp/tn-compression-env/bin/python -m pip check
+/tmp/tn-runtime-env/bin/python -m pip check
+python -m tn_compression.llm_pilot --output-dir "$RUN_DIR" --preflight-only \
+  --compression-python /tmp/tn-compression-env/bin/python \
+  --runtime-python /tmp/tn-runtime-env/bin/python
+
 # First real pilot; explicitly permits remote asset downloads.
 python -m tn_compression.llm_pilot --output-dir "$RUN_DIR" --allow-download \
   --compression-python /tmp/tn-compression-env/bin/python \
@@ -118,6 +125,21 @@ changed source, config, probes or package inventories are refused. Environments
 are preflighted afresh before any completed stages are reused. Freeze resolved
 dependencies with each environment's `python -m pip freeze` for rebuilding later.
 Avoid concurrent controllers writing the same output directory.
+
+GPU verification succeeds only if the native artifacts reload and the validation
+report contains finite measurements for dense and each successful candidate.
+Inspect `status`, `reasons`, `feasible`, `slower_than_dense`, `pareto_frontier`, and
+the per-workload timings. A successful controller invocation does not guarantee
+that every candidate passed: failures are retained. Final test success additionally
+requires `test-report.json` to report `test_complete` and
+`quality_guardrails_passed: true`. Public benchmark scores remain task-specific;
+they do not have an automatic quality acceptance threshold in this pilot.
+
+RTN is the basic weight-observer rounding baseline using QuantizationModifier.
+It uses the same target modules, W4A16 scheme, ignored output head and saved-artifact
+runtime as GPTQ/AWQ. The shared calibration forward pass runs for all three;
+RTN's weight-only scales do not use activation-aware fitting. Similar nominal
+bits do not imply identical serialized bytes: compare achieved measurements.
 
 After inspecting validation, choose a feasible candidate (example: `gptq`):
 
@@ -166,19 +188,25 @@ The final working-tree check in the existing CPU image, with networking disabled
 
 ```text
 python -m pytest -q -rs -p no:cacheprovider --disable-warnings
-208 passed, 6 skipped, 18 warnings in 65.32s
+210 passed, 6 skipped, 18 warnings in 105.58s
 ```
 
 Five analyzer-shell checks and one Pet-shell check were skipped because the CPU
 image lacks the required Git/Bash tool combination. Existing warnings concern
 Matplotlib/PyParsing, fixed-shape ONNX tracing and the tiny LoRA fixture.
-Focused LLM/Pet checks passed: 14 passed, 1 shell skip. Standard-library CPU dry
+Focused LLM/direct-recipe/UI lifecycle checks passed: 17 passed. The corrected
+quick-demo preset and direct-recipe checks passed: 5 passed. Standard-library CPU dry
 runs (including final benchmark command generation), Python syntax and
 `git diff --check` passed. Dry runs created no output directory.
 
 Independent source review caught and verified fixes for Transformers 5 chat
 template output, the pinned evaluation-harness YAML loader, and immutable resume
-after an unselected failure. The suite included four pre-existing local UI/direct
-recipe edits; those edits are outside this milestone's commits. No new GPU
+after an unselected failure. Browser verification exercised reference/custom
+language mode switching, combined-recipe configuration, desktop/mobile rendering
+and the completed synthetic vision lifecycle. The quick demo now uses a rank
+that actually saves bytes; a regression check covers its default configuration.
+The UI detector still flags existing small-text/contrast and style issues; it is
+not a clean accessibility audit. Native Git Bash syntax checks and the analyzer
+shell dry run passed separately. No new GPU
 packages or model weights were installed/downloaded locally. Native GPU execution,
 public benchmark execution and performance results remain unverified.

@@ -103,7 +103,7 @@ def test_cpu_dry_run_has_no_side_effects_or_gpu_imports(tmp_path):
                                 "--dry-run"], capture_output=True, text=True, check=True)
     report = json.loads(completed.stdout)
     assert report["status"] == "dry_run"
-    assert len(report["commands"]) == 8
+    assert len(report["commands"]) == 10
     assert not report["final_test_enabled"]
     assert not output.exists()
 
@@ -120,6 +120,28 @@ def test_resume_checks_completed_results_and_artifacts(tmp_path):
     artifact.write_bytes(b"changed")
     with pytest.raises(ValueError, match="Changed artifact"):
         execute(command, target, timeout=5, allow_download=False)
+
+
+def test_preflight_only_never_prepares_or_loads_model_assets(tmp_path, monkeypatch):
+    calls = []
+    def worker(command, target, **kwargs):
+        calls.append(command[3])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        value = {"status": "ok", "gpu": "test device"}
+        target.write_text(json.dumps(value))
+        return value
+    monkeypatch.setattr("tn_compression.llm_pilot.execute", worker)
+    monkeypatch.setattr("tn_compression.llm_pilot.subprocess.check_output", lambda *a, **kw: "a" * 40)
+    args = argparse.Namespace(config=CONFIG, output_dir=tmp_path / "study", compression_python=sys.executable,
+                              runtime_python=sys.executable, dry_run=False, allow_download=False,
+                              finalize=False, select=None, preflight_only=True)
+    assert run(args)["status"] == "preflight_complete"
+    assert calls == ["preflight", "preflight"]
+    assert not (args.output_dir / "inputs.json").exists()
+    assert not (args.output_dir / "validation-report.json").exists()
+    args.finalize, args.select = True, "gptq"
+    with pytest.raises(ValueError, match="cannot select"):
+        run(args)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Native vLLM workers run on Linux")
@@ -160,7 +182,7 @@ def test_controller_lifecycle_freezes_selection_and_excludes_unselected_test(tmp
     args = argparse.Namespace(config=CONFIG, output_dir=tmp_path / "study", compression_python=sys.executable,
                               runtime_python=sys.executable, dry_run=False, allow_download=False, finalize=False, select=None)
     report = run(args)
-    assert report["pareto_frontier"] == ["gptq"]
+    assert report["pareto_frontier"] == ["rtn", "gptq"]
     assert not any(role == "test" for _, _, role in calls)
     calls.clear()
     args.finalize, args.select = True, "gptq"
