@@ -125,6 +125,47 @@ The benchmark models are stable fixtures, not an allowlist. A model is supported
 
 CKA, gradients, and reconstruction error are useful diagnostics, but none is presented as a substitute for end-to-end evaluation.
 
+## Plan a budgeted compression experiment
+
+A layer can look good during calibration and still hurt quality when combined
+with other changes. This planner uses the existing analyzer to screen layer
+edits, then evaluates whole configurations against explicit limits for quality
+loss, serialized bundle bytes, memory, and median latency on a specified
+PyTorch CPU or CUDA device. Every search strategy gets the same number of
+whole-configuration attempts.
+
+Run the offline CPU example on Linux. The example uses a randomly initialized
+ResNet-18 and synthetic inputs to verify the experiment workflow.
+
+```bash
+python -m pip install -e '.[vision,deployment]'
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
+tn-compress experiment --config examples/configs/experiment-cpu.yaml \
+  --output-dir runs/experiment-cpu --plan-only
+tn-compress experiment --config examples/configs/experiment-cpu.yaml \
+  --output-dir runs/experiment-cpu
+```
+
+`--plan-only` runs the shared analyzer screen and writes the plan before dense
+benchmarking and trial execution. Omit it to run the comparison. Repeat the
+execution command on the same host and boot to resume the run.
+
+`experiment.json` records the dense baseline, per-strategy budget and outcomes,
+and two Pareto frontiers. `frontier` contains measured trials that no other
+measured trial beats on all four objectives, with at least one strict
+improvement. `feasible_frontier` applies the same rule after filtering to trials
+that passed every limit. Inspect `violations` and `error` to distinguish
+measured constraint failures from attempts that could not be measured.
+
+The planner ranks a small set of compatible configurations using the analyzer's
+quality and size evidence. It can try a multi-layer configuration early in the
+budget. The current greedy approach measures each cumulative edit and rolls
+back quality failures. Seeded random search tests how much the evidence helps
+under the same measurement budget. A larger adaptive search would add compute
+and tuning before this small-budget comparison establishes a benefit.
+[Protocol, artifact schema, and GPU follow-up](docs/architecture.md)
+
 ## Configuration at a glance
 
 Compression policies can target one layer, groups of layers, or all compatible layers. This example replaces one convolution with a rank-8 Partial Tucker factorization:

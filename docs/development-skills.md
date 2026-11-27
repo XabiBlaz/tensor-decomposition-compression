@@ -25,3 +25,25 @@ Requirements already settled by the user: open models on NVIDIA GPUs, LLM first,
 representative capability metrics, best measured trade-off, then CNN, ASR and TTS.
 The user's instruction to proceed authorizes this bounded first implementation;
 it does not authorize downloads/training locally, paid compute or publication.
+
+## Repository skills in a new Cloud task
+
+The repository vendors Ponytail and Frontend Design under `.agents/skills/`.
+The [upstream pins](../.agents/skills/UPSTREAM.md) link to both reviewed
+revisions and identify the licenses shipped with them.
+
+Start a **new** Codex Cloud task for this repository and select
+`codex/experiment-planner` as its initial checkout. Ask it to report the
+available repository skills and their paths before reading any skill files.
+The discovery check passes when its startup catalog lists both `ponytail`
+and `frontend-design` from the checkout. Then ask it to read both skills
+and confirm the path it used. If either is absent, use the following check in
+the repository root to distinguish a missing checkout file from a discovery
+issue.
+
+```bash
+git branch --show-current
+git ls-files .agents/skills
+test -r .agents/skills/ponytail/SKILL.md &&
+  test -r .agents/skills/frontend-design/SKILL.md
+```
