@@ -108,9 +108,20 @@ def split_file(repo, revision, path, content):
             and re.fullmatch(r"[=\-~^`]{3,}", lines[index].strip())
         ):
             header = re.match(r"^(.+)$", line)
+        leading_into_code = (
+            block
+            and block[-1].rstrip().endswith(":")
+            and index < len(lines)
+            and re.match(r"^\s*(`{3,}|~{3,})", lines[index])
+        )
         if (
             header
-            or (not fence and len(block) >= 10 and not line.strip())
+            or (
+                not fence
+                and len(block) >= 10
+                and not line.strip()
+                and not leading_into_code
+            )
             or len(block) >= 32
         ):
             item = passage(index - 1)

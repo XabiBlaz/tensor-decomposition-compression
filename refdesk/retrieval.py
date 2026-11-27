@@ -5,8 +5,9 @@ import re
 from collections import Counter
 
 STOP = set(
-    """a about all am an and any are as at be been but by can could did do does
-for from get give had has have how i if in into is it me of on or our please also about
+    """a about again all am an and any are as at be been but by can could did do does
+for from get give had has have how i if in inside into is it me my of on or our please also
+each make
 repo repository should so some tell than that the their them then there these they
 this those to use used using want was were what when where which who why will with would
 you your current currently now latest still old older outdated previous originally
@@ -41,6 +42,28 @@ ALIASES = {
     "enables": "enable",
     "enabling": "enable",
     "adds": "add",
+    "applying": "apply",
+    "around": "surround",
+    "caches": "cache",
+    "directories": "directory",
+    "interprets": "interpret",
+    "interpreting": "interpret",
+    "keeps": "keep",
+    "lines": "line",
+    "literally": "literal",
+    "matches": "match",
+    "patterns": "pattern",
+    "reading": "read",
+    "reads": "read",
+    "reconstructs": "reload",
+    "respecting": "respect",
+    "respects": "respect",
+    "surrounding": "surround",
+    "tested": "test",
+    "verified": "test",
+    "verifies": "test",
+    "verify": "test",
+    "web": "ui",
 }
 FOLLOW_UP = re.compile(
     r"\b(it|its|that|those|there|this|they|same|also|above)\b|^\s*(and|what about)\b",
@@ -60,12 +83,73 @@ PROCEDURAL = {
     "release",
     "add",
     "rules",
+    "interpret",
+    "apply",
+    "print",
+    "see",
 }
 VERSION = re.compile(r"\bv?\d+\.\d+(?:\.\d+)?\b")
 
+# shortcut: a bounded English vocabulary, until broader semantic recall is measured
+PHRASES = (
+    (re.compile(r"\bsaved (bundle|checkpoint)\b"), r"\1"),
+    (re.compile(r"\bround-to-nearest\b"), "rounding"),
+    (
+        re.compile(r"\b(?:writ(?:es?|ing) changes back to|modif(?:y|ies|ying))\b"),
+        "modify",
+    ),
+    (re.compile(r"\b(\d+)[- ]bit\b"), r"\1bit bit"),
+    (
+        re.compile(
+            r"\b(?:pickled model object|serialized (?:python )?(?:model object|nn\.module))\b"
+        ),
+        "serialized model",
+    ),
+    (
+        re.compile(
+            r"\b(?:preview which (?:files|paths) (?:will|would) be (?:scanned|searched) without (?:matching|searching) anything|"
+            r"(?:print|list|show) the files that (?:[\w-]+ )?would search,? but (?:don.t|do not) actually search them)\b"
+        ),
+        "preview searchable file search",
+    ),
+    (
+        re.compile(r"\b(?:read-only|writ(?:e|ing) to)\b"),
+        "write access",
+    ),
+    (
+        re.compile(r"\b(?:docker|cpu|gpu) image\b"),
+        "container image",
+    ),
+    (
+        re.compile(
+            r"\b(?:in (?:my|the|a|your) browser|https?://(?:localhost|127\.0\.0\.1):\d+)\b"
+        ),
+        "browser",
+    ),
+    (
+        re.compile(
+            r"\b(?:bring (?:my|your) own|without downloading (?:a dataset|one)|avoid(?:s|ing)? the dataset download)\b"
+        ),
+        "local",
+    ),
+    (
+        re.compile(
+            r"\b(?:order (?:the )?output alphabetically by (?:file ?name|path)|sort(?:ing)? (?:its |the )?output by (?:file ?name|path))\b"
+        ),
+        "sort output path",
+    ),
+)
+IDENTIFIER = re.compile(
+    r"(?<![\w-])--[a-zA-Z][\w-]*|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b"
+    r"|(?<![\w./-])(?:[\w.-]+/)*[\w.-]+\.(?:toml|yaml|yml|json|md|rst|py|sh|ini|cfg|txt|onnx|pkl)\b"
+)
+
 
 def terms(text):
-    words = re.findall(r"[a-z0-9]+", text.lower())
+    text = re.sub(r"\s+", " ", text.lower().replace("*", " ").replace("`", " "))
+    for expression, canonical in PHRASES:
+        text = expression.sub(canonical, text)
+    words = re.findall(r"[a-z0-9]+", text)
     return [
         ALIASES.get(word, word) for word in words if word not in STOP and len(word) > 1
     ]
@@ -104,16 +188,25 @@ class Index:
             return []
         historical = HISTORY.search(question)
         versions = VERSION.findall(question)
+        identifiers = {
+            re.compile(rf"(?<![\w./-]){re.escape(value)}(?![\w./-])")
+            for value in IDENTIFIER.findall(question)
+        }
         scored = []
         for source, counts, title, vocabulary, length in self.rows:
             hits = query & vocabulary
             if len(hits) < (1 if len(query) <= 2 else math.ceil(len(query) * 0.50)):
                 continue
+            searchable = (
+                f"{source.path} {source.heading} {source.revision} {source.text}"
+            )
+            if identifiers and not all(item.search(searchable) for item in identifiers):
+                continue
             # Exact version strings cannot be established by separate number matches.
             if versions and not all(
                 re.search(
                     rf"(?<![\d.])v?{re.escape(v.lstrip('v'))}(?![\d.])",
-                    f"{source.heading} {source.revision} {source.text}",
+                    searchable,
                 )
                 for v in versions
             ):
@@ -129,6 +222,10 @@ class Index:
                 self.weights[t] * (0.45 + 0.9 * (t in title))
                 for t in sorted(soft_terms & vocabulary)
             )
+            if "enable" in soft_terms and re.search(
+                r"(?m)^\s*(?:`{3,}|~{3,})", source.text
+            ):
+                score += 1.8
             if "flag" in soft_terms:
                 score += sum(
                     4.5

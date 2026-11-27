@@ -1,0 +1,28 @@
+[
+  {
+    "repo": "XabiBlaz/tensor-decomposition-compression",
+    "revision": "de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9",
+    "cases": [
+      {"id": "tensor-port", "type": "answerable", "question": "Where in my browser can I open the local interface?", "paths": ["README.md", "docs/user-demo.md", "docs/demo.md"], "facts": ["http://localhost:7860"]},
+      {"id": "tensor-caches", "type": "answerable", "question": "Where does Docker keep the Hugging Face caches?", "paths": ["docs/user-demo.md", "docs/qwen-demo.md"], "facts": ["Docker volumes", "Hugging"]},
+      {"id": "tensor-data", "type": "answerable", "question": "Can the container write to my data directory?", "paths": ["docs/user-demo.md", "docs/demo.md"], "facts": ["read-only", "/data"]},
+      {"id": "tensor-local", "type": "answerable", "question": "Can I bring my own dataset for a language model without downloading one?", "paths": ["docs/language.md", "docs/user-demo.md"], "facts": ["text_json"]},
+      {"id": "tensor-train", "type": "multi_turn", "question": "Which data partition does it use for recovery?", "previous": ["How are language models fine-tuned with LoRA?"], "paths": ["docs/language.md", "docs/user-demo.md"], "facts": ["train", "partition"]},
+      {"id": "tensor-qwen-version", "type": "outdated", "question": "Where do I get the Qwen demo for Python 99.0.0?"},
+      {"id": "tensor-managed", "type": "unanswerable", "question": "Which enterprise billing plan includes the hosted compression dashboard?"}
+    ]
+  },
+  {
+    "repo": "BurntSushi/ripgrep",
+    "revision": "3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f",
+    "cases": [
+      {"id": "rg-links", "type": "answerable", "question": "How do I make the search follow symbolic links?", "paths": ["GUIDE.md"], "facts": ["--follow"]},
+      {"id": "rg-neighbors", "type": "answerable", "question": "How do I print the lines around each match?", "paths": ["GUIDE.md"], "facts": ["--context"]},
+      {"id": "rg-config-debug", "type": "multi_turn", "question": "How can I see which file it is reading?", "previous": ["Where do I set the ripgrep configuration file?"], "paths": ["GUIDE.md"], "facts": ["--debug", "configuration file"]},
+      {"id": "rg-zip", "type": "answerable", "question": "How do I search inside a gzip-compressed file?", "paths": ["FAQ.md", "GUIDE.md"], "facts": ["--search-zip", "gzip"]},
+      {"id": "rg-sort", "type": "answerable", "question": "Can I order the output alphabetically by filename?", "paths": ["GUIDE.md", "FAQ.md"], "facts": ["--sort path"]},
+      {"id": "rg-fake-flag", "type": "unanswerable", "question": "Can --list-visible-files preview the files searched without running the match?"},
+      {"id": "rg-old-setting", "type": "outdated", "question": "Did version 15.2.0 start respecting GIT_CONFIG_GLOBAL?", "paths": ["CHANGELOG.md"], "facts": ["GIT_CONFIG_GLOBAL"], "status": "historical"}
+    ]
+  }
+]

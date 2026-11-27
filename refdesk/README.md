@@ -92,8 +92,12 @@ or rate-limited, the interface reports partial coverage.
 The 24 MiB compressed archive limit, 192 KiB per-file limit, 100-file budget,
 and 3,500-file-passage budget keep ingestion bounded. Repositories with sparse
 docs, unsupported formats, large archives, or examples outside recognized
-locations may yield little evidence. Retrieval is English-oriented and literal.
-Source excerpts can be related to the question without fully answering it.
+locations may yield little evidence. Refdesk currently serves English text.
+Retrieval normalizes common English technical phrases and checks exact flags,
+paths, environment variables, and version strings. The default extractive mode
+still requires coverage of the normalized query before quoting a source. The
+Click holdout found that relevant passages can rank well and still lead to
+abstention.
 Historical labels use changelog/archive conventions and GitHub activity types.
 The app can surface competing excerpts on version-related questions, while
 general contradiction detection and semantic citation verification remain
@@ -121,8 +125,10 @@ updating the pin. See [the measured run](evaluation/README.md).
 `github.py` validates public URLs, resolves default HEAD, downloads the
 immutable archive without extracting it, and gathers both optional REST
 sources. `sources.py` chooses files and chunks them with repository-relative
-paths and original line ranges. `retrieval.py` ranks by document frequency,
-coverage, section headings, exact commands and version strings. Recent
+paths and original line ranges. Setup instructions and the code blocks they
+introduce can stay in the same passage. `retrieval.py` normalizes English
+phrasing and ranks by document frequency, coverage, section headings, exact
+commands and version strings. Recent
 questions can boost candidate passages for referential follow-ups. `chat.py`
 owns abstention, historical labeling and citation validation.
 `providers.py` supplies either a local extractive answer or optional synthesis.

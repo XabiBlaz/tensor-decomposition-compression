@@ -1,0 +1,16 @@
+[
+  {
+    "repo": "pallets/click",
+    "revision": "08b803cf32ceb2ae6a772c62d5da42757a897d44",
+    "cases": [
+      {"id": "click-count", "type": "answerable", "question": "How do I make a repeatable verbosity option produce an integer count?", "paths": ["docs/options.md"], "facts": ["count=True"]},
+      {"id": "click-confirm", "type": "multi_turn", "question": "Can it abort the program if they answer no?", "previous": ["How do I ask for confirmation at the terminal?"], "paths": ["docs/prompts.md"], "facts": ["click.confirm", "abort=True"]},
+      {"id": "click-prompt-test", "type": "answerable", "question": "How do I pass input to a prompt in a CliRunner test?", "paths": ["docs/testing.md"], "facts": ["runner.invoke", "input="]},
+      {"id": "click-atomic", "type": "answerable", "question": "How do I write to a temporary file before replacing the destination?", "paths": ["docs/handling-files.md"], "facts": ["atomic=True", "separate"]},
+      {"id": "click-abort", "type": "answerable", "question": "How does Ctrl+C behave with standalone_mode=False?", "paths": ["docs/exceptions.md"], "facts": ["standalone_mode=False", "KeyboardInterrupt", "Abort"]},
+      {"id": "click-shell", "type": "answerable", "question": "How do I generate completion for a fish shell?", "paths": ["docs/shell-completion.md"], "facts": ["fish_source"]},
+      {"id": "click-plugin", "type": "unanswerable", "question": "Does CLICK_SYNC_CACHE_URL enable hosted command logs?"},
+      {"id": "click-unknown-release", "type": "outdated", "question": "In Click 99.99.99, is isolated_filesystem deprecated?"}
+    ]
+  }
+]

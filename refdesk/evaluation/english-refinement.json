@@ -1,0 +1,22 @@
+[
+  {
+    "repo": "XabiBlaz/tensor-decomposition-compression",
+    "revision": "de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9",
+    "cases": [
+      {"id": "tensor-bundle-reload", "type": "answerable", "question": "Do I have to run the decomposition again to reload a saved bundle?", "paths": ["README.md"], "facts": ["without rerunning decomposition"]},
+      {"id": "tensor-bytes", "type": "answerable", "question": "Does the 4-bit rounding reference count as storage compression?", "paths": ["docs/user-demo.md"], "facts": ["does not count as storage compression"]},
+      {"id": "tensor-pytorch-parity", "type": "answerable", "question": "What is ONNX export tested against for parity?", "paths": ["README.md", "docs/qwen-demo.md"], "facts": ["PyTorch", "parity"]},
+      {"id": "tensor-invalid-config", "type": "unanswerable", "question": "Set the compression runtime in enterprise-settings.ini. What format does that file take?"}
+    ]
+  },
+  {
+    "repo": "BurntSushi/ripgrep",
+    "revision": "3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f",
+    "cases": [
+      {"id": "rg-untouched", "type": "answerable", "question": "Does applying --replace write changes back to the files?", "paths": ["GUIDE.md", "FAQ.md"], "facts": ["never modify your files"]},
+      {"id": "rg-no-filename", "type": "unanswerable", "question": "How do I suppress the filename in match output?"},
+      {"id": "rg-binary", "type": "multi_turn", "question": "What about searching binary files as text?", "previous": ["How do I search hidden files?"], "paths": ["GUIDE.md"], "facts": ["--text", "binary"]},
+      {"id": "rg-unknown-plugin", "type": "unanswerable", "question": "Can I configure RIPGREP_PLUGIN_PATH to load third-party extensions?"}
+    ]
+  }
+]

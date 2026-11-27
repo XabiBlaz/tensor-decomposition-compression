@@ -106,6 +106,45 @@ class TextTest(unittest.TestCase):
         outcome = answer(index, "How do I configure the Oracle Kubernetes exporter?")
         self.assertEqual(outcome["status"], "insufficient")
 
+    def test_paraphrase_preserves_documented_option(self):
+        index = index_for(
+            (
+                "README.md",
+                "# File selection\n`--list`: Print the files that finder would search, but don't actually search them.",
+            ),
+        )
+        result = answer(
+            index,
+            "How do I preview which paths will be scanned without matching anything?",
+        )
+        self.assertEqual(result["status"], "supported")
+        self.assertIn("--list", result["citations"][0]["text"])
+
+    def test_similar_option_names_and_bit_widths_are_not_equivalent(self):
+        index = index_for(
+            (
+                "README.md",
+                "# Options\nSet cache mode with --mode-cache.\nThe 4-bit rounding reference is experimental.",
+            )
+        )
+        for question in (
+            "How do I set cache mode with --cache-mode?",
+            "Is the 9-bit rounding reference experimental?",
+        ):
+            with self.subTest(question=question):
+                self.assertEqual(answer(index, question)["status"], "insufficient")
+
+    def test_source_keeps_a_code_example_with_its_lead_in(self):
+        text = (
+            "# Setup\n"
+            + "Preparation\n" * 9
+            + "Run the local server:\n\n```sh\nserve --local\n```\n"
+        )
+        evidence = list(split_file(REPO, REV, "README.md", text))
+        self.assertEqual(len(evidence), 1)
+        self.assertIn("Run the local server:\n\n```sh\nserve --local", evidence[0].text)
+        self.assertTrue(evidence[0].url.endswith("#L1-L15"))
+
     def test_outdated_source_for_current_question(self):
         index = index_for(
             ("README.md", "# Server port\nThe current server port is 9000."),

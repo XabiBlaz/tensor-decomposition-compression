@@ -1,5 +1,7 @@
 # Text evaluation
 
+## Initial release
+
 These are synthetic prompts with source checks written for two real GitHub
 repositories. The suite checks specific paths and answer facts in retrieved
 passages and citations. No real users participated. Both repositories used the
@@ -44,6 +46,49 @@ revisions, per-case evidence and stage timing. Reproduce the holdout with:
 ```sh
 python -m refdesk.evaluate --suite refdesk/evaluation/holdout.json
 ```
+
+## English retrieval follow-up
+
+The update rewrites common English technical phrases in queries and indexed
+passages. The original wording and line numbers remain in citations. It checks
+literal flags, environment variables, and file paths before ranking and keeps
+version checks. Fenced commands stay with their lead-in when the passage
+budget allows.
+
+| Synthetic suite | Before | After | Relevant passages in top six after |
+| --- | ---: | ---: | ---: |
+| Original development | 14/14 | 14/14 | 9/9 |
+| Original holdout, used for this update | 2/6 | 6/6 | 4/4 |
+| [English check](english-check.json), used for this update | 4/14 | 14/14 | 11/11 |
+| [English refinement](english-refinement.json), used for this update | 4/8 | 8/8 | 5/5 |
+| [Click transfer holdout](click-holdout.json), untouched during tuning | 2/8 | 2/8 | 5/6, up from 3/6 |
+
+All 29 evidence-backed tasks in the first four suites returned supported
+citations in the updated run. The updated app correctly abstained on all 15
+cases expected to abstain across the five suites. One refinement question
+about suppressing filenames expects abstention because the indexed current
+ripgrep sources lacked instructions for that flag. A changelog mention alone
+was insufficient for the question.
+
+Click required only its public URL. The app still abstained on all six
+answerable Click questions. Four relevant passages ranked first, exposing a
+gap between retrieval and the extractive answer policy. Query normalization
+improved transfer retrieval, while broad cross-repository answer quality remains
+unverified beyond these cases. Click warm p50/p95 turn latency was
+0.31/0.73 ms. The largest warm p95 across the five suites was 1.65 ms, with
+$0 in metered model charges. The runs used commit-pinned files. GitHub's
+release and issue endpoints were unavailable in this environment.
+
+Reproduce the transfer check with the default extractive provider:
+
+```sh
+python -m refdesk.evaluate --suite refdesk/evaluation/click-holdout.json
+```
+
+The [measured Click run](click-results.json) records every case and the
+latency breakdown. The test suite and desktop and phone browser checks also
+exercise English paraphrase handling, exact identifier checks, and version
+abstention.
 
 ## Voice preview
 

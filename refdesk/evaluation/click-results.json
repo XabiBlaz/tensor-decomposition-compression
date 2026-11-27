@@ -1,0 +1,121 @@
+{
+  "provider": "extractive",
+  "synthetic": true,
+  "repeats_per_case": 5,
+  "results": [
+    {
+      "repository": "pallets/click",
+      "revision": "08b803cf32ceb2ae6a772c62d5da42757a897d44",
+      "files": 74,
+      "passages": 766,
+      "warnings": [
+        "Releases unavailable from GitHub.",
+        "Issues unavailable from GitHub."
+      ],
+      "ingest_ms": 1246.76,
+      "retrieval_hit_at_6": 0.8333333333333334,
+      "retrieval_mrr_at_6": 0.7000000000000001,
+      "citation_support": null,
+      "abstained": 2,
+      "should_abstain": 2,
+      "completed": 2,
+      "cost_usd": 0,
+      "latency_ms": {
+        "retrieval_ms": {
+          "p50": 0.302,
+          "p95": 0.618
+        },
+        "generation_ms": {
+          "p50": 0.008,
+          "p95": 0.018
+        },
+        "total_ms": {
+          "p50": 0.31,
+          "p95": 0.729
+        }
+      },
+      "cases": [
+        {
+          "id": "click-count",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 1,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "click-confirm",
+          "type": "multi_turn",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 1,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "click-prompt-test",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 1,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "click-atomic",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "click-abort",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 1,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "click-shell",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 5,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "click-plugin",
+          "type": "unanswerable",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        },
+        {
+          "id": "click-unknown-release",
+          "type": "outdated",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        }
+      ]
+    }
+  ]
+}

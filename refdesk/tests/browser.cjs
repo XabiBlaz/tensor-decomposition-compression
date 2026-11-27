@@ -40,20 +40,25 @@ async function run() {
       await page.getByRole("button", { name: "Ask", exact: false }).last().click();
       await page.locator("article").nth(1).locator("pre").filter({ hasText: "compose.gpu.yaml" }).first().waitFor();
       if (process.env.REFDESK_SCREENSHOTS) await page.screenshot({ path: `/tmp/refdesk-${name}-chat.png` });
+      await compose.fill("Can I upload a pickled model object to the vision UI?");
+      await compose.press("Enter");
+      const paraphrase = page.locator("article").nth(2);
+      await paraphrase.getByText("nn.Module", { exact: true }).waitFor();
+      await paraphrase.locator(".citations").getByText("docs/user-demo.md", { exact: false }).waitFor();
       await compose.fill("Which MATLAB add-on license enables the Android TensorRT exporter?");
       await compose.press("Enter");
-      await page.locator("article").nth(2).getByText("Insufficient evidence", { exact: false }).waitFor();
+      await page.locator("article").nth(3).getByText("Insufficient evidence", { exact: false }).waitFor();
       await page.locator("article").last().getByRole("button", { name: "Flag as unhelpful" }).click();
       await page.getByRole("button", { name: "Flagged as unhelpful" }).waitFor();
       await page.getByRole("button", { name: "Draft issue" }).click();
       assert.match(await page.getByRole("textbox", { name: "Issue draft" }).inputValue(), /MATLAB/);
       await page.getByRole("button", { name: "Close" }).click();
       await page.reload();
-      assert.equal(await page.locator("article").count(), 3);
+      assert.equal(await page.locator("article").count(), 4);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
       assert.deepEqual(errors, []);
       await page.close();
-      console.log(`${name} ${width}×${height}: loading, repository, refresh, follow-up, citations, abstention, feedback, issue draft and history passed`);
+      console.log(`${name} ${width}×${height}: loading, repository, refresh, follow-up, paraphrase, citations, abstention, feedback, issue draft and history passed`);
     }
   } finally {
     await browser.close();
