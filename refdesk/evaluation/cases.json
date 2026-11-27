@@ -1,0 +1,159 @@
+[
+  {
+    "repo": "XabiBlaz/tensor-decomposition-compression",
+    "revision": "de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9",
+    "cases": [
+      {
+        "id": "tensor-install",
+        "type": "answerable",
+        "question": "How do I start the Docker Compose UI?",
+        "paths": [
+          "README.md",
+          "docs/user-demo.md",
+          "docs/demo.md"
+        ],
+        "facts": [
+          "docker compose up --build -d",
+          "localhost:7860"
+        ]
+      },
+      {
+        "id": "tensor-cuda",
+        "type": "multi_turn",
+        "question": "What about CUDA?",
+        "previous": [
+          "How do I start the Docker Compose UI?"
+        ],
+        "paths": [
+          "README.md",
+          "docs/user-demo.md",
+          "docs/qwen-demo.md"
+        ],
+        "facts": [
+          "compose.gpu.yaml"
+        ]
+      },
+      {
+        "id": "tensor-cli",
+        "type": "answerable",
+        "question": "Which command runs evaluate on the compressed model?",
+        "paths": [
+          "README.md",
+          "docs/workflows.md",
+          "docs/language.md"
+        ],
+        "facts": [
+          "tn-compress evaluate",
+          "--checkpoint"
+        ]
+      },
+      {
+        "id": "tensor-bundle",
+        "type": "answerable",
+        "question": "Which checksum do model bundles use?",
+        "paths": [
+          "README.md",
+          "docs/provenance.md"
+        ],
+        "facts": [
+          "SHA-256"
+        ]
+      },
+      {
+        "id": "tensor-unknown",
+        "type": "unanswerable",
+        "question": "Which MATLAB add-on license enables the Android TensorRT exporter?"
+      },
+      {
+        "id": "tensor-privacy",
+        "type": "unanswerable",
+        "question": "What is the maintainer\u2019s private support phone number?"
+      },
+      {
+        "id": "tensor-obsolete",
+        "type": "outdated",
+        "question": "Does the 0.0.3 Docker Compose UI still use port 7860?"
+      }
+    ]
+  },
+  {
+    "repo": "BurntSushi/ripgrep",
+    "revision": "3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f",
+    "cases": [
+      {
+        "id": "rg-config",
+        "type": "answerable",
+        "question": "How does RIPGREP_CONFIG_PATH configure ripgrep?",
+        "paths": [
+          "GUIDE.md"
+        ],
+        "facts": [
+          "RIPGREP_CONFIG_PATH",
+          "file path"
+        ]
+      },
+      {
+        "id": "rg-hidden",
+        "type": "answerable",
+        "question": "How do I search hidden files?",
+        "paths": [
+          "README.md",
+          "GUIDE.md"
+        ],
+        "facts": [
+          "--hidden"
+        ]
+      },
+      {
+        "id": "rg-ignore",
+        "type": "multi_turn",
+        "question": "Can it also disable ignore rules?",
+        "previous": [
+          "How do I search hidden files?"
+        ],
+        "paths": [
+          "README.md",
+          "GUIDE.md"
+        ],
+        "facts": [
+          "--no-ignore"
+        ]
+      },
+      {
+        "id": "rg-pcre",
+        "type": "answerable",
+        "question": "Which flag enables PCRE2?",
+        "paths": [
+          "README.md",
+          "FAQ.md",
+          "GUIDE.md"
+        ],
+        "facts": [
+          "--pcre2"
+        ]
+      },
+      {
+        "id": "rg-unknown",
+        "type": "unanswerable",
+        "question": "How do I query a remote MySQL database by passing a JDBC connection string to ripgrep?"
+      },
+      {
+        "id": "rg-history",
+        "type": "outdated",
+        "question": "Did release 15.2.0 add aarch64-unknown-linux-musl binaries?",
+        "paths": [
+          "CHANGELOG.md"
+        ],
+        "facts": [
+          "aarch64-unknown-linux-musl"
+        ],
+        "status": "historical"
+      },
+      {
+        "id": "rg-obsolete",
+        "type": "outdated",
+        "question": "Can I use the current configuration instructions unchanged on ripgrep 99.99.99?"
+      }
+    ]
+  }
+]

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Refdesk — GitHub repository support</title>
+    <link rel="stylesheet" href="/style.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#question">Skip to question</a>
+    <aside class="sidebar" aria-label="Repository workspace">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">↳</span>
+        <span>Refdesk</span>
+      </div>
+      <section class="repository">
+        <h2>Repository</h2>
+        <form id="repository-form">
+          <label for="repository-url">Public GitHub URL</label>
+          <input id="repository-url" type="url" placeholder="https://github.com/owner/repo" required spellcheck="false" autocomplete="off">
+          <button class="index-button" type="submit">Index repository</button>
+        </form>
+        <div id="repository-status" class="repository-status" role="status"></div>
+        <div id="repository-detail" class="repository-detail" hidden>
+          <a id="repository-link" target="_blank" rel="noopener"></a>
+          <code id="revision"></code>
+          <p id="coverage"></p>
+          <button id="refresh" class="secondary" type="button">Refresh sources</button>
+        </div>
+      </section>
+      <section class="history-panel">
+        <div class="history-heading">
+          <h2>Conversation</h2>
+          <button id="new-chat" class="secondary" type="button" hidden>New chat</button>
+        </div>
+        <ol id="history"></ol>
+        <p id="history-empty">Your questions will appear here.</p>
+      </section>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <a id="active-repository" href="#repository-url">Support workspace</a>
+        <span id="mode">Text chat</span>
+      </header>
+      <div id="scroll-region" class="scroll-region">
+        <div class="reading">
+          <section id="welcome" class="welcome">
+            <div class="branch-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+            <h1>Ask the repository.</h1>
+            <p>Get help with setup, usage, and troubleshooting, with links to the source behind each answer.</p>
+            <div id="suggestions" class="suggestions">
+              <button type="button" data-example>How do I install it?</button>
+              <button type="button" data-example>Where can I find usage examples?</button>
+              <button type="button" data-example>How do I contribute?</button>
+            </div>
+          </section>
+          <h1 id="thread-title" class="sr-only" hidden>Repository support conversation</h1>
+          <div id="thread" aria-label="Messages"></div>
+          <p id="chat-status" class="chat-status" role="status"></p>
+        </div>
+      </div>
+      <footer class="composer">
+        <form id="chat-form" class="composer-inner">
+          <label for="question">Your question</label>
+          <div class="compose-row">
+            <textarea id="question" rows="2" maxlength="1600" required placeholder="Ask a technical question…"></textarea>
+            <button id="ask" class="ask" type="submit">Ask <span aria-hidden="true">↵</span></button>
+          </div>
+          <div class="composer-tools">
+            <span>Enter to ask. Shift+Enter for a new line.</span>
+            <button id="voice-toggle" type="button" hidden>Start voice</button>
+            <button id="draft" type="button" hidden>Draft issue</button>
+          </div>
+          <p id="voice-status" role="status" hidden></p>
+        </form>
+      </footer>
+      <dialog id="issue-dialog" aria-labelledby="issue-title">
+        <h2 id="issue-title">Draft a GitHub issue</h2>
+        <p>Review the draft, remove sensitive details, and copy it into an issue when you’re ready.</p>
+        <label for="issue-body">Issue draft</label>
+        <textarea id="issue-body" rows="12"></textarea>
+        <div class="dialog-actions">
+          <form method="dialog"><button type="submit">Close</button></form>
+          <button id="copy-issue" class="ask" type="button">Copy draft</button>
+        </div>
+        <p id="copy-status" role="status"></p>
+      </dialog>
+    </main>
+  </body>
+</html>

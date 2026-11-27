@@ -1,0 +1,233 @@
+{
+  "provider": "extractive",
+  "synthetic": true,
+  "repeats_per_case": 5,
+  "results": [
+    {
+      "repository": "xabiblaz/tensor-decomposition-compression",
+      "revision": "de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9",
+      "files": 39,
+      "passages": 228,
+      "warnings": [
+        "Releases unavailable from GitHub.",
+        "Issues unavailable from GitHub."
+      ],
+      "ingest_ms": 971.79,
+      "retrieval_hit_at_6": 1.0,
+      "retrieval_mrr_at_6": 1.0,
+      "citation_support": 1.0,
+      "abstained": 3,
+      "should_abstain": 3,
+      "completed": 7,
+      "cost_usd": 0,
+      "latency_ms": {
+        "retrieval_ms": {
+          "p50": 0.084,
+          "p95": 1.366
+        },
+        "generation_ms": {
+          "p50": 0.008,
+          "p95": 0.098
+        },
+        "total_ms": {
+          "p50": 0.099,
+          "p95": 1.384
+        }
+      },
+      "cases": [
+        {
+          "id": "tensor-install",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/xabiblaz/tensor-decomposition-compression/blob/de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9/docs/demo.md#L9-L20"
+          ]
+        },
+        {
+          "id": "tensor-cuda",
+          "type": "multi_turn",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/xabiblaz/tensor-decomposition-compression/blob/de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9/docs/qwen-demo.md#L9-L18"
+          ]
+        },
+        {
+          "id": "tensor-cli",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/xabiblaz/tensor-decomposition-compression/blob/de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9/docs/language.md#L27-L39"
+          ]
+        },
+        {
+          "id": "tensor-bundle",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/xabiblaz/tensor-decomposition-compression/blob/de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9/README.md#L154-L163"
+          ]
+        },
+        {
+          "id": "tensor-unknown",
+          "type": "unanswerable",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        },
+        {
+          "id": "tensor-privacy",
+          "type": "unanswerable",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        },
+        {
+          "id": "tensor-obsolete",
+          "type": "outdated",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        }
+      ]
+    },
+    {
+      "repository": "burntsushi/ripgrep",
+      "revision": "3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f",
+      "files": 26,
+      "passages": 390,
+      "warnings": [
+        "Releases unavailable from GitHub.",
+        "Issues unavailable from GitHub."
+      ],
+      "ingest_ms": 1138.27,
+      "retrieval_hit_at_6": 1.0,
+      "retrieval_mrr_at_6": 1.0,
+      "citation_support": 1.0,
+      "abstained": 2,
+      "should_abstain": 2,
+      "completed": 7,
+      "cost_usd": 0,
+      "latency_ms": {
+        "retrieval_ms": {
+          "p50": 0.196,
+          "p95": 0.265
+        },
+        "generation_ms": {
+          "p50": 0.01,
+          "p95": 0.032
+        },
+        "total_ms": {
+          "p50": 0.207,
+          "p95": 0.282
+        }
+      },
+      "cases": [
+        {
+          "id": "rg-config",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/burntsushi/ripgrep/blob/3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f/GUIDE.md#L542-L553"
+          ]
+        },
+        {
+          "id": "rg-hidden",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/burntsushi/ripgrep/blob/3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f/GUIDE.md#L193-L211"
+          ]
+        },
+        {
+          "id": "rg-ignore",
+          "type": "multi_turn",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/burntsushi/ripgrep/blob/3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f/GUIDE.md#L193-L211"
+          ]
+        },
+        {
+          "id": "rg-pcre",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "supported",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/burntsushi/ripgrep/blob/3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f/FAQ.md#L462-L473"
+          ]
+        },
+        {
+          "id": "rg-unknown",
+          "type": "unanswerable",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        },
+        {
+          "id": "rg-history",
+          "type": "outdated",
+          "expected": "historical",
+          "actual": "historical",
+          "relevant_rank": 1,
+          "citation_support": 1.0,
+          "completed": true,
+          "citations": [
+            "https://github.com/burntsushi/ripgrep/blob/3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f/CHANGELOG.md#L107-L117"
+          ]
+        },
+        {
+          "id": "rg-obsolete",
+          "type": "outdated",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        }
+      ]
+    }
+  ]
+}

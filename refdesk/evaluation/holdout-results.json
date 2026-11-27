@@ -1,0 +1,135 @@
+{
+  "provider": "extractive",
+  "synthetic": true,
+  "repeats_per_case": 5,
+  "results": [
+    {
+      "repository": "xabiblaz/tensor-decomposition-compression",
+      "revision": "de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9",
+      "files": 39,
+      "passages": 228,
+      "warnings": [
+        "Releases unavailable from GitHub.",
+        "Issues unavailable from GitHub."
+      ],
+      "ingest_ms": 798.87,
+      "retrieval_hit_at_6": 0.5,
+      "retrieval_mrr_at_6": 0.25,
+      "citation_support": null,
+      "abstained": 1,
+      "should_abstain": 1,
+      "completed": 1,
+      "cost_usd": 0,
+      "latency_ms": {
+        "retrieval_ms": {
+          "p50": 0.08,
+          "p95": 0.248
+        },
+        "generation_ms": {
+          "p50": 0.006,
+          "p95": 0.201
+        },
+        "total_ms": {
+          "p50": 0.087,
+          "p95": 0.404
+        }
+      },
+      "cases": [
+        {
+          "id": "tensor-nvidia",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "tensor-pickle",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 2,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "tensor-ios",
+          "type": "unanswerable",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        }
+      ]
+    },
+    {
+      "repository": "burntsushi/ripgrep",
+      "revision": "3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f",
+      "files": 26,
+      "passages": 390,
+      "warnings": [
+        "Releases unavailable from GitHub.",
+        "Issues unavailable from GitHub."
+      ],
+      "ingest_ms": 986.5,
+      "retrieval_hit_at_6": 0.5,
+      "retrieval_mrr_at_6": 0.25,
+      "citation_support": null,
+      "abstained": 1,
+      "should_abstain": 1,
+      "completed": 1,
+      "cost_usd": 0,
+      "latency_ms": {
+        "retrieval_ms": {
+          "p50": 0.181,
+          "p95": 0.376
+        },
+        "generation_ms": {
+          "p50": 0.005,
+          "p95": 0.162
+        },
+        "total_ms": {
+          "p50": 0.195,
+          "p95": 0.386
+        }
+      },
+      "cases": [
+        {
+          "id": "rg-dry-run",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "rg-literal",
+          "type": "answerable",
+          "expected": "supported",
+          "actual": "insufficient",
+          "relevant_rank": 2,
+          "citation_support": null,
+          "completed": false,
+          "citations": []
+        },
+        {
+          "id": "rg-remote",
+          "type": "unanswerable",
+          "expected": "insufficient",
+          "actual": "insufficient",
+          "relevant_rank": null,
+          "citation_support": null,
+          "completed": true,
+          "citations": []
+        }
+      ]
+    }
+  ]
+}

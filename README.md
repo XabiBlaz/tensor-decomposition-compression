@@ -8,6 +8,14 @@ Tensor decomposition is simple in spirit, the difficult part is choosing **which
 
 > A smaller parameter count is not automatically a faster model. TN Compression keeps storage, quality, and runtime measurements separate so the result reflects the deployment you will actually use.
 
+## Ask this repository
+
+Refdesk is a local support chat for public GitHub repositories. It indexes
+documentation and examples by commit, follows the thread across questions,
+and links each answer to its sources. Run `python -m refdesk` from this checkout
+and open <http://localhost:3000>. See the [Refdesk README](refdesk/README.md) for
+configuration, evaluated repositories, and the system design.
+
 ## The workflow
 
 ```mermaid

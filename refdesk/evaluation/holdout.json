@@ -1,0 +1,20 @@
+[
+  {
+    "repo": "XabiBlaz/tensor-decomposition-compression",
+    "revision": "de99fae18a0cc379986a2977b8dcd5b0cfb6ffb9",
+    "cases": [
+      {"id": "tensor-nvidia", "type": "answerable", "question": "How do I enable the NVIDIA overlay on my host?", "paths": ["README.md", "docs/qwen-demo.md"], "facts": ["compose.gpu.yaml"]},
+      {"id": "tensor-pickle", "type": "answerable", "question": "Can I upload a pickled model object to the vision UI?", "paths": ["docs/user-demo.md"], "facts": ["nn.Module", "cannot be loaded safely"]},
+      {"id": "tensor-ios", "type": "unanswerable", "question": "How can I export the compressed model to a signed iOS XCFramework?"}
+    ]
+  },
+  {
+    "repo": "BurntSushi/ripgrep",
+    "revision": "3e85c6c148fdce38a99ceeb9d2780dc7b03b4a4f",
+    "cases": [
+      {"id": "rg-dry-run", "type": "answerable", "question": "How do I preview which paths will be scanned without matching anything?", "paths": ["GUIDE.md"], "facts": ["--files", "would"]},
+      {"id": "rg-literal", "type": "answerable", "question": "Which flag interprets a search pattern literally?", "paths": ["GUIDE.md"], "facts": ["--fixed-strings", "literal string"]},
+      {"id": "rg-remote", "type": "unanswerable", "question": "What OAuth client secret is needed for ripgrep's hosted search dashboard?"}
+    ]
+  }
+]
