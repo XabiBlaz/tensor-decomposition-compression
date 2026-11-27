@@ -33,7 +33,7 @@ The [upstream pins](../.agents/skills/UPSTREAM.md) link to both reviewed
 revisions and identify the licenses shipped with them.
 
 Start a **new** Codex Cloud task for this repository and select
-`codex/experiment-planner` as its initial checkout. Ask it to report the
+`experiment-planner` as its initial checkout. Ask it to report the
 available repository skills and their paths before reading any skill files.
 The discovery check passes when its startup catalog lists both `ponytail`
 and `frontend-design` from the checkout. Then ask it to read both skills
