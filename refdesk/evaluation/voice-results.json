@@ -1,0 +1,96 @@
+{
+  "synthetic_microphone": true,
+  "fixture": "how do i search hidden files",
+  "matched_transcripts": 0,
+  "repetitions": 5,
+  "word_error_rate": 0.83,
+  "scenarios_passed": [
+    "cancel while recording",
+    "stop playback",
+    "transcription connection failure",
+    "speech connection failure",
+    "typed follow-up after spoken turn"
+  ],
+  "latency_ms": {
+    "transcription_ms": {
+      "p50": 985.82,
+      "p95": 1117.76
+    },
+    "retrieval_ms": {
+      "p50": 0.68,
+      "p95": 0.92
+    },
+    "generation_ms": {
+      "p50": 0.17,
+      "p95": 0.24
+    },
+    "synthesis_first_chunk_ms": {
+      "p50": 125.18,
+      "p95": 156.93
+    },
+    "end_to_audio_onset_ms": {
+      "p50": 2662.6,
+      "p95": 2688.1
+    },
+    "finish_to_audio_onset_ms": {
+      "p50": 1792.6,
+      "p95": 1848.5
+    },
+    "submit_to_audio_onset_ms": {
+      "p50": 444,
+      "p95": 467.8
+    }
+  },
+  "samples": [
+    {
+      "transcript": "can devise certain files",
+      "transcription_ms": 1117.757040000015,
+      "retrieval_ms": 0.47725399986120465,
+      "generation_ms": 0.23956500012900506,
+      "synthesis_first_chunk_ms": 124.81,
+      "end_to_audio_onset_ms": 2688.0999999998603,
+      "finish_to_audio_onset_ms": 1848.5,
+      "submit_to_audio_onset_ms": 467.79999999981374
+    },
+    {
+      "transcript": "can devise certain files",
+      "transcription_ms": 968.455036000023,
+      "retrieval_ms": 0.6847859999652428,
+      "generation_ms": 0.05550700007006526,
+      "synthesis_first_chunk_ms": 125.18,
+      "end_to_audio_onset_ms": 2662.5999999998603,
+      "finish_to_audio_onset_ms": 1792.5999999998603,
+      "submit_to_audio_onset_ms": 443.39999999990687
+    },
+    {
+      "transcript": "can devise certain files",
+      "transcription_ms": 1047.160938999923,
+      "retrieval_ms": 0.9204969999245805,
+      "generation_ms": 0.1650899998821842,
+      "synthesis_first_chunk_ms": 136.09,
+      "end_to_audio_onset_ms": 2602.1999999999534,
+      "finish_to_audio_onset_ms": 1791.3999999999069,
+      "submit_to_audio_onset_ms": 444
+    },
+    {
+      "transcript": "can devise certain files",
+      "transcription_ms": 954.1297929999928,
+      "retrieval_ms": 0.5085420000341401,
+      "generation_ms": 0.04347599997345242,
+      "synthesis_first_chunk_ms": 156.93,
+      "end_to_audio_onset_ms": 2673.8000000000466,
+      "finish_to_audio_onset_ms": 1800.3000000000466,
+      "submit_to_audio_onset_ms": 467.69999999995343
+    },
+    {
+      "transcript": "can devise certain files",
+      "transcription_ms": 985.8157859998755,
+      "retrieval_ms": 0.7207529999959661,
+      "generation_ms": 0.22684900000058406,
+      "synthesis_first_chunk_ms": 121.84,
+      "end_to_audio_onset_ms": 2609.8000000000466,
+      "finish_to_audio_onset_ms": 1765.0999999998603,
+      "submit_to_audio_onset_ms": 432.89999999990687
+    }
+  ]
+}

@@ -46,6 +46,38 @@ call. Stdout logs include source URLs, indexed revision, request errors,
 retrieval and generation timing, token usage, and estimated cost when rates
 and usage are available. Feedback logs the answer trace ID.
 
+## Run optional local voice
+
+Use a Chromium browser with microphone permission, FFmpeg built with the
+`flite` filter, and the optional PocketSphinx English recognizer. Install it
+in the Python environment that runs Refdesk.
+
+```sh
+python -m pip install 'pocketsphinx==5.0.4'
+REFDESK_VOICE=1 python -m refdesk
+```
+
+Index a repository. Choose **Start voice**, speak, and choose **Finish
+recording**. Review or edit the transcript, then choose **Ask aloud**.
+Refdesk sends the transcript to the normal chat turn, shows the cited answer
+in the same history, and plays the first 1,400 characters as local streamed
+audio. The text retains the full answer and citation links. Recording auto-stops
+after 15 seconds. The browser sends mono PCM to the local server for
+in-memory recognition. Both speech adapters run without speech credentials.
+
+**Stop voice** cancels recording, pending voice requests, or playback. If a
+turn already finished, its text stays in the conversation. If transcription
+fails, record again or type a question. If chat fails after transcription, the
+confirmed question stays in the composer for retry. If synthesis fails, read
+the answer in chat. Text chat stays usable when voice is off or dependencies
+are unavailable.
+
+Voice is a preview. PocketSphinx can misrecognize commands, identifiers, and
+ordinary speech. The browser measures transcription, retrieval, generation,
+synthesis startup, and estimated audio onset. Accuracy and timing were tested
+with a synthetic microphone fixture on Chromium. See the
+[voice evaluation](evaluation/README.md#voice-preview).
+
 ## Sources and limitations
 
 The index reads UTF-8 Markdown, MDX, reStructuredText, AsciiDoc, plain text,

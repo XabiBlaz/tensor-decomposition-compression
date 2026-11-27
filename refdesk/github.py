@@ -10,7 +10,8 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from time import perf_counter
-from urllib.error import HTTPError, URLError
+from urllib.error import URLError
+from urllib.parse import quote
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .sources import Evidence, priority, split_file
@@ -151,6 +152,7 @@ def file_evidence(archive_bytes, repo, revision):
 
 
 def activity(repo, revision, endpoint):
+    started = perf_counter()
     query = (
         "per_page=8"
         if endpoint == "releases"
@@ -162,12 +164,13 @@ def activity(repo, revision, endpoint):
                 f"https://api.github.com/repos/{repo}/{endpoint}?{query}", 1024 * 1024
             )
         )
-    except (HTTPError, URLError, OSError, ValueError, SourceError) as exc:
+    except (OSError, ValueError, SourceError) as exc:
         LOG.info(
-            "github_api repo=%s endpoint=%s error=%s",
+            "github_api repo=%s endpoint=%s error=%s ms=%.2f",
             repo,
             endpoint,
             type(exc).__name__,
+            (perf_counter() - started) * 1000,
         )
         return [], f"{endpoint.capitalize()} unavailable from GitHub."
     result = []
@@ -188,8 +191,6 @@ def activity(repo, revision, endpoint):
         else:
             ref = row["tag_name"]
             path, kind = ref, "release"
-            from urllib.parse import quote
-
             url = f"https://github.com/{repo}/releases/tag/{quote(ref, safe='')}"
             title = row.get("name") or ref
         date = row.get("published_at") or row.get("updated_at") or ""
@@ -205,19 +206,29 @@ def activity(repo, revision, endpoint):
                     True,
                 )
             )
+    LOG.info(
+        "github_api repo=%s endpoint=%s passages=%d ms=%.2f",
+        repo,
+        endpoint,
+        len(result),
+        (perf_counter() - started) * 1000,
+    )
     return result, None
 
 
 def ingest(repo):
     start = perf_counter()
     branch, revision = default_head(repo)
+    head_done = perf_counter()
     try:
         archive = download(
             f"https://codeload.github.com/{repo}/zip/{revision}", MAX_ARCHIVE
         )
     except (URLError, OSError) as exc:
         raise SourceError("The public source archive could not be downloaded.") from exc
+    archive_done = perf_counter()
     evidence, files, limited = file_evidence(archive, repo, revision)
+    parse_done = perf_counter()
     warnings = ["Source selection reached a size or count limit."] if limited else []
     with ThreadPoolExecutor(max_workers=2) as pool:
         calls = [
@@ -232,12 +243,16 @@ def ingest(repo):
     if not evidence:
         raise SourceError("No supported documentation or examples were found.")
     LOG.info(
-        "ingest repo=%s revision=%s files=%d passages=%d ms=%.2f warnings=%s",
+        "ingest repo=%s revision=%s files=%d passages=%d total_ms=%.2f "
+        "head_ms=%.2f archive_ms=%.2f parse_ms=%.2f warnings=%s",
         repo,
         revision,
         files,
         len(evidence),
         (perf_counter() - start) * 1000,
+        (head_done - start) * 1000,
+        (archive_done - head_done) * 1000,
+        (parse_done - archive_done) * 1000,
         warnings,
     )
     return Snapshot(repo, branch, revision, tuple(evidence), files, tuple(warnings))

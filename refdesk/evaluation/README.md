@@ -44,3 +44,39 @@ revisions, per-case evidence and stage timing. Reproduce the holdout with:
 ```sh
 python -m refdesk.evaluate --suite refdesk/evaluation/holdout.json
 ```
+
+## Voice preview
+
+Headless Chromium captured one synthetic fixture, “How do I search hidden
+files?”, through its microphone interface five times. The test used the local
+PocketSphinx and Flite adapters and ripgrep’s live commit-pinned file index.
+It corrected the transcript before submitting each turn. The recognizer
+matched **0 of 5** transcripts exactly, with **83% word error rate** on this
+fixture. The corrected turns all returned the expected cited guide. No human
+speakers, physical speakers, or acoustic environments were evaluated.
+
+| Stage | p50 | p95 |
+| --- | ---: | ---: |
+| Transcription | 985.82 ms | 1,117.76 ms |
+| Retrieval | 0.68 ms | 0.92 ms |
+| Answer generation | 0.17 ms | 0.24 ms |
+| Synthesis to first PCM chunk | 125.18 ms | 156.93 ms |
+| Estimated end of speech to audio onset | 2,662.60 ms | 2,688.10 ms |
+| Finish recording to audio onset | 1,792.60 ms | 1,848.50 ms |
+| Ask aloud to audio onset | 444.00 ms | 467.80 ms |
+
+Speech end is the last microphone PCM block above the amplitude threshold.
+Audio onset is the first qualifying signal observed in the browser’s Web
+Audio graph plus its output-latency estimate. These are instrumented estimates
+and include scripted transcript review where applicable. There were no
+metered speech or model charges.
+
+The browser checks verified stopping recording and playback, independent
+connection failures during transcription and synthesis, preservation of
+the text answer after a synthesis failure, and a typed follow-up that used the
+spoken turn’s history. See [raw voice timings and transcripts](voice-results.json).
+With voice enabled and Playwright available to Node, run:
+
+```sh
+node refdesk/tests/voice-browser.cjs
+```

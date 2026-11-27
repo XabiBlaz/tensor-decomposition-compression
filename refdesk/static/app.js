@@ -1,9 +1,12 @@
+import { connectVoice } from "./voice.js";
+
 const $ = (id) => document.getElementById(id);
 const question = $("question");
 const urlInput = $("repository-url");
 const empty = () => ({ repository: null, turns: [] });
 let state = empty();
 let pending = false;
+let voiceActive = false;
 
 try {
   const saved = JSON.parse(localStorage.getItem("refdesk-conversation"));
@@ -47,9 +50,9 @@ async function post(path, body, signal) {
 
 function controls() {
   for (const id of ["ask", "refresh", "new-chat", "draft"]) {
-    $(id).disabled = pending;
+    $(id).disabled = pending || voiceActive;
   }
-  urlInput.form.querySelector("button").disabled = pending;
+  urlInput.form.querySelector("button").disabled = pending || voiceActive;
   $("new-chat").hidden = state.turns.length === 0;
   $("draft").hidden = state.turns.length === 0;
 }
@@ -195,7 +198,7 @@ function threadVisibility() {
 }
 
 async function loadRepository(raw, refresh) {
-  if (pending) return;
+  if (pending || voiceActive) return;
   pending = true;
   controls();
   message("repository-status", refresh ? "Refreshing GitHub sources…" : "Reading GitHub sources…");
@@ -278,7 +281,7 @@ $("new-chat").addEventListener("click", () => {
 });
 $("chat-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  ask(question.value);
+  if (!voiceActive) ask(question.value);
 });
 question.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -314,3 +317,16 @@ $("copy-issue").addEventListener("click", async () => {
 });
 if (state.repository) urlInput.value = `https://github.com/${state.repository.repo}`;
 render();
+
+connectVoice({
+  button: $("voice-toggle"),
+  cancel: $("voice-cancel"),
+  status: $("voice-status"),
+  question,
+  ask,
+  ready: () => Boolean(state.repository && !pending),
+  onActive: (active) => {
+    voiceActive = active;
+    controls();
+  },
+});
