@@ -17,7 +17,7 @@ from pathlib import Path
 
 def benchmark_bundle(path, *, input_shape=(1, 3, 256, 256), device="cpu", task="segmentation",
                      warmup=20, iterations=100, threads=1, timeout=600, seed=0, output_tokens=32,
-                     input_ids=None, workload_id=None):
+                     input_ids=None, workload_id=None, _pass_fds=()):
     command = [sys.executable, "-m", "tn_compression.benchmark", str(Path(path).resolve()),
                json.dumps({"input_shape": input_shape, "device": device, "task": task,
                            "warmup": warmup, "iterations": iterations, "threads": threads, "seed": seed,
@@ -26,7 +26,8 @@ def benchmark_bundle(path, *, input_shape=(1, 3, 256, 256), device="cpu", task="
     environment = {**os.environ, "OMP_NUM_THREADS": str(threads), "MKL_NUM_THREADS": str(threads),
                    "OPENBLAS_NUM_THREADS": str(threads)}
     try:
-        result = subprocess.run(command, capture_output=True, text=True, env=environment, timeout=timeout)
+        result = subprocess.run(command, capture_output=True, text=True, env=environment,
+                                timeout=timeout, pass_fds=_pass_fds)
     except subprocess.TimeoutExpired:
         return {"status": "timeout", "runtime": "pytorch", "timeout_seconds": timeout}
     try:
@@ -93,6 +94,9 @@ def _worker(path, options):
         synchronize()
         load_seconds = time.perf_counter() - start
         rss_after = process.memory_info().rss
+        # Reconstruction draws random weights before loading the saved tensors.
+        # Use an independent generator so different recipes see the same workload.
+        generator = torch.Generator(device=device).manual_seed(options["seed"])
         language = options["task"] == "causal_lm"
         if language:
             if len(options["input_shape"]) != 2 or options["input_shape"][0] != 1 or options["input_shape"][1] < 1:
@@ -101,7 +105,8 @@ def _worker(path, options):
                 raise ValueError("output_tokens must be positive.")
             token_ids = options.get("input_ids")
             if token_ids is None:
-                inputs = torch.randint(model.config.vocab_size, options["input_shape"], device=device)
+                inputs = torch.randint(model.config.vocab_size, options["input_shape"],
+                                       device=device, generator=generator)
                 options["workload_id"] = options.get("workload_id") or "seeded_synthetic_token_ids"
             else:
                 if (not isinstance(token_ids, list) or not token_ids
@@ -111,7 +116,8 @@ def _worker(path, options):
                 inputs = torch.tensor([token_ids], device=device, dtype=torch.long)
                 options["input_shape"] = list(inputs.shape)
         else:
-            inputs = torch.randn(options["input_shape"], device=device, dtype=next(model.parameters()).dtype)
+            inputs = torch.randn(options["input_shape"], device=device,
+                                 dtype=next(model.parameters()).dtype, generator=generator)
         if options["task"] == "detection":
             inputs = list(inputs.unbind(0))
         with evaluation_mode(model), torch.inference_mode():

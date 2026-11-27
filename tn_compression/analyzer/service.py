@@ -330,10 +330,8 @@ def _validate_frontier(model, frontier, validation_batches, adapter, baseline, c
     return selected
 
 
-def _select_candidates(model, candidates, validation_batches, adapter, baseline, cache,
-                       target_bytes, max_quality_loss):
-    current_bytes = tensor_bytes(model)
-    _validate_constraints(target_bytes, max_quality_loss)
+def greedy_candidate_order(candidates):
+    """Order the candidates used by cumulative damage-aware selection."""
     viable = [candidate for candidate in candidates
               if candidate.status == "validated" and candidate.quality_loss is not None
               and candidate.allocation_eligible
@@ -341,6 +339,14 @@ def _select_candidates(model, candidates, validation_batches, adapter, baseline,
     viable.sort(key=lambda row: (
         row.quality_loss / row.estimated_bytes_saved,
         row.quality_loss, -row.estimated_bytes_saved, row.layer_path, row.candidate_id))
+    return viable
+
+
+def _select_candidates(model, candidates, validation_batches, adapter, baseline, cache,
+                       target_bytes, max_quality_loss):
+    current_bytes = tensor_bytes(model)
+    _validate_constraints(target_bytes, max_quality_loss)
+    viable = greedy_candidate_order(candidates)
     originals = {}
     accepted = []
     cumulative = baseline
@@ -390,6 +396,17 @@ def _select_candidates(model, candidates, validation_batches, adapter, baseline,
         model._tn_transformations = transformations
 
 
+def candidate_transformation(candidate: CandidateResult) -> Dict[str, Any]:
+    return {
+        "candidate_id": candidate.candidate_id,
+        "layer_path": candidate.layer_path,
+        "method": candidate.method,
+        "configuration": copy.deepcopy(candidate.configuration),
+        "checkpoint_reconstruction": copy.deepcopy(candidate.checkpoint_reconstruction),
+        "backend_support": copy.deepcopy(candidate.backend_support),
+    }
+
+
 def _plan(report, original_bytes, final_bytes):
     accepted = [candidate for candidate in report.candidates if candidate.decision == "accepted"]
     target_bytes = report.constraints.get("target_size_bytes")
@@ -407,17 +424,7 @@ def _plan(report, original_bytes, final_bytes):
         "status": ("not_selected" if target_bytes is None else
                    "feasible" if final_bytes <= target_bytes else "infeasible"),
         "policy": "greedy measured damage per byte with cumulative validation and rollback",
-        "transformations": [
-            {
-                "candidate_id": candidate.candidate_id,
-                "layer_path": candidate.layer_path,
-                "method": candidate.method,
-                "configuration": copy.deepcopy(candidate.configuration),
-                "checkpoint_reconstruction": copy.deepcopy(candidate.checkpoint_reconstruction),
-                "backend_support": copy.deepcopy(candidate.backend_support),
-            }
-            for candidate in accepted
-        ],
+        "transformations": [candidate_transformation(candidate) for candidate in accepted],
     }
 
 

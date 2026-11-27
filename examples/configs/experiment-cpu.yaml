@@ -1,0 +1,49 @@
+seed: 17
+task: classification
+num_classes: 3
+model:
+  source: torchvision
+  name: resnet18
+  task: classification
+  weights: null
+  kwargs:
+    num_classes: 3
+data:
+  kind: synthetic
+  seed: 23
+  count: 24
+  size: 32
+  batch_size: 4
+analysis:
+  quality_metric: loss
+  include: [layer3.1.conv2, layer4.0.conv1, layer4.1.conv1, layer4.1.conv2]
+  max_samples: 8
+  max_spatial_size: 8
+  max_validated_per_layer: 3
+  candidate_grid:
+    linear:
+      methods: []
+    conv2d:
+      methods: [partial_tucker]
+      ranks: [[8, 8], [32, 32], [64, 64]]
+    quantization:
+      enabled: false
+    gated_mlp:
+      methods: []
+experiment:
+  schema_version: 1
+  device: cpu
+  runtime: pytorch
+  seed: 31
+  max_trials_per_strategy: 4
+  max_quality_loss: 0.05
+  max_serialized_bytes: 34000000
+  max_memory_bytes: 600000000
+  max_latency_ms: 15
+benchmark:
+  input_shape: [1, 3, 32, 32]
+  seed: 47
+  warmup: 5
+  iterations: 50
+  threads: 1
+  timeout: 120

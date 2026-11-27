@@ -83,12 +83,45 @@ def evaluate(model, config, role, device):
             "example_ids": identifiers, "role": role}
 
 
+def benchmark_options(config):
+    options = dict(config.get("benchmark", {}))
+    if config.get("task") == "causal_lm" and "input_ids" not in options:
+        from .tasks.language import load_text_split
+        role = options.pop("role", "validation")
+        batches, identifiers = load_text_split(config, role)
+        requested_length = options.get("input_shape", [1, 64])[1]
+        mask = batches[0].get("attention_mask", torch.ones_like(batches[0]["input_ids"]))[0].bool()
+        tokens = batches[0]["input_ids"][0][mask][:requested_length].tolist()
+        if not tokens:
+            raise ValueError("The selected benchmark text produced no prompt tokens.")
+        options.update(input_ids=tokens, input_shape=[1, len(tokens)],
+                       workload_id=f"{identifiers[0]}:sha256:{hashlib.sha256(bytes(str(tokens), 'utf-8')).hexdigest()}")
+    return options
+
+
 def run(args):
     config = load_config(args.config)
+    if getattr(args, "plan_only", False) and args.command != "experiment":
+        raise ValueError("--plan-only is only supported for experiment.")
+    request = None
+    if args.command == "experiment":
+        from .experiment_plan import ExperimentRequest
+
+        settings = config.get("experiment")
+        if not isinstance(settings, dict):
+            raise ValueError("Experiment requires an experiment request in the workflow config.")
+        request = ExperimentRequest(**settings)
+        if any(getattr(args, name, None) is not None for name in
+               ("plan", "level", "target_size_mb", "max_quality_loss", "backend")) or args.role != "validation":
+            raise ValueError("Use workflow experiment settings and the validation role for experiments.")
+        if args.device is not None and args.device != request.device:
+            raise ValueError("--device must match experiment.device.")
+        if config.get("analysis", {}).get("backend", request.runtime) != request.runtime:
+            raise ValueError("analysis.backend must match experiment.runtime.")
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(config.get("seed", 0))
-    device = str(resolve_device(args.device, config))
+    device = str(resolve_device(request.device if request else args.device or 'cpu', config))
     if config.get("task") == "causal_lm":
         from .language_assets import preflight_language_assets
         preflight_language_assets(config, allow_download=bool(os.environ.get("TN_ALLOW_HF_DOWNLOAD") == "1"),
@@ -113,18 +146,7 @@ def run(args):
         if not args.checkpoint:
             raise ValueError("benchmark requires --checkpoint.")
         from .benchmark import benchmark_bundle
-        options = dict(config.get("benchmark", {}))
-        if config.get("task") == "causal_lm" and "input_ids" not in options:
-            from .tasks.language import load_text_split
-            role = options.pop("role", "validation")
-            batches, identifiers = load_text_split(config, role)
-            requested_length = options.get("input_shape", [1, 64])[1]
-            mask = batches[0].get("attention_mask", torch.ones_like(batches[0]["input_ids"]))[0].bool()
-            tokens = batches[0]["input_ids"][0][mask][:requested_length].tolist()
-            if not tokens:
-                raise ValueError("The selected benchmark text produced no prompt tokens.")
-            options.update(input_ids=tokens, input_shape=[1, len(tokens)],
-                           workload_id=f"{identifiers[0]}:sha256:{hashlib.sha256(bytes(str(tokens), 'utf-8')).hexdigest()}")
+        options = benchmark_options(config)
         result = benchmark_bundle(args.checkpoint, device=device, task=config.get("task", "segmentation"),
                                   **options)
     else:
@@ -136,6 +158,18 @@ def run(args):
         else:
             model = load_model(config["model"]).to(device)
         model.eval()
+        if request:
+            from .experiments import run_experiment
+
+            calibration, calibration_ids = analysis_batches(config, "calibration")
+            validation, validation_ids = analysis_batches(config, "validation")
+            detection_coco = validation.dataset.coco if config.get("task") == "detection" else None
+            return run_experiment(
+                model, config, request, output, calibration=calibration,
+                calibration_ids=calibration_ids, validation=validation,
+                validation_ids=validation_ids, benchmark=benchmark_options(config),
+                detection_coco=detection_coco, plan_only=getattr(args, "plan_only", False),
+            )
         if args.command == "snapshot":
             manifest = save_bundle(model, output / "bundle", metadata={"workflow": config, "purpose": "original baseline"})
             result = {"status": "saved", "bundle": str(output / "bundle"),
@@ -353,11 +387,12 @@ def main(argv=None):
     import logging
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Inspect, compress and evaluate configurable PyTorch models.")
-    parser.add_argument("command", choices=["inspect", "layers", "split-ids", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "generate", "export", "export-language-onnx", "benchmark"])
+    parser.add_argument("command", choices=["inspect", "layers", "split-ids", "snapshot", "calibrate", "analyze", "relevance", "plan", "compress", "train", "finetune", "recover-lora", "evaluate-lora", "evaluate", "generate", "export", "export-language-onnx", "benchmark", "experiment"])
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint")
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device")
+    parser.add_argument("--plan-only", action="store_true", help="Write the experiment plan before trial execution.")
     parser.add_argument("--role", choices=["calibration", "validation", "test"], default="validation")
     parser.add_argument("--level", choices=["structural", "calibrated", "validated"])
     parser.add_argument("--target-size-mb", type=float)

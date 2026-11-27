@@ -1,0 +1,54 @@
+seed: 0
+task: causal_lm
+model:
+  source: transformers
+  name: Qwen/Qwen2.5-0.5B
+  revision: 060db6499f32faf8b98477b0a26969ef7d8b9987
+  weights: pretrained
+  kwargs:
+    torch_dtype: float32
+data:
+  kind: huggingface
+  name: Salesforce/wikitext
+  revision: b08601e04326c79dfdd32d625aee71d232d685c3
+  subset: wikitext-2-raw-v1
+  splits:
+    calibration: train
+    validation: validation
+    test: test
+  samples: 32
+  minimum_characters: 80
+  max_length: 128
+  batch_size: 1
+analysis:
+  quality_metric: nll
+  include: [model.layers.22.mlp.down_proj, model.layers.23.mlp.down_proj]
+  max_samples: 128
+  max_validated_per_layer: 3
+  candidate_grid:
+    linear:
+      methods: [svd]
+      ranks: [128, 256, 448]
+    quantization:
+      enabled: false
+    gated_mlp:
+      methods: []
+experiment:
+  schema_version: 1
+  device: cuda:0
+  runtime: pytorch
+  seed: 31
+  max_trials_per_strategy: 3
+  max_quality_loss: 0.1
+  max_serialized_bytes: 1960000000
+  max_memory_bytes: 2300000000
+  max_latency_ms: 1500
+benchmark:
+  role: validation
+  input_shape: [1, 64]
+  output_tokens: 32
+  seed: 47
+  warmup: 3
+  iterations: 10
+  threads: 2
+  timeout: 600
